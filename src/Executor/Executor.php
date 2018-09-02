@@ -37,6 +37,7 @@ use function array_keys;
 use function array_merge;
 use function array_reduce;
 use function array_values;
+use function assert;
 use function get_class;
 use function is_array;
 use function is_object;
@@ -211,17 +212,18 @@ class Executor
         $hasMultipleAssumedOperations = false;
 
         foreach ($documentNode->definitions as $definition) {
-            switch ($definition->kind) {
+            switch ($definition->getKind()) {
                 case NodeKind::OPERATION_DEFINITION:
+                    assert($definition instanceof OperationDefinitionNode);
                     if (! $operationName && $operation) {
                         $hasMultipleAssumedOperations = true;
                     }
-                    if (! $operationName ||
-                        (isset($definition->name) && $definition->name->value === $operationName)) {
+                    if (! $operationName || ($definition->name !== null && $definition->name->value === $operationName)) {
                         $operation = $definition;
                     }
                     break;
                 case NodeKind::FRAGMENT_DEFINITION:
+                    assert($definition instanceof FragmentDefinitionNode);
                     $fragments[$definition->name->value] = $definition;
                     break;
             }
@@ -258,7 +260,7 @@ class Executor
             return $errors;
         }
 
-        Utils::invariant($operation, 'Has operation if no errors.');
+        Utils::invariant($operation !== null, 'Has operation if no errors.');
         Utils::invariant($variableValues !== null, 'Has variables if no errors.');
 
         return new ExecutionContext(
@@ -310,6 +312,7 @@ class Executor
         if ($data !== null) {
             $data = (array) $data;
         }
+
         return new ExecutionResult($data, $this->exeContext->errors);
     }
 
@@ -341,6 +344,7 @@ class Executor
                     null,
                     function ($error) {
                         $this->exeContext->addError($error);
+
                         return $this->exeContext->promises->createFulfilled(null);
                     }
                 );
@@ -349,6 +353,7 @@ class Executor
             return $result;
         } catch (Error $error) {
             $this->exeContext->addError($error);
+
             return null;
         }
     }
@@ -569,10 +574,12 @@ class Executor
                 if ($promise) {
                     return $promise->then(function ($resolvedResult) use ($responseName, $results) {
                         $results[$responseName] = $resolvedResult;
+
                         return $results;
                     });
                 }
                 $results[$responseName] = $result;
+
                 return $results;
             },
             []
@@ -582,6 +589,7 @@ class Executor
                 return self::fixResultsIfEmptyArray($resolvedResults);
             });
         }
+
         return self::fixResultsIfEmptyArray($result);
     }
 
@@ -1002,15 +1010,18 @@ class Executor
      */
     private function promiseReduce(array $values, \Closure $callback, $initialValue)
     {
-        return array_reduce($values, function ($previous, $value) use ($callback) {
-            $promise = $this->getPromise($previous);
-            if ($promise) {
-                return $promise->then(function ($resolved) use ($callback, $value) {
-                    return $callback($resolved, $value);
-                });
-            }
-            return $callback($previous, $value);
-        }, $initialValue);
+        return array_reduce($values,
+            function ($previous, $value) use ($callback) {
+                $promise = $this->getPromise($previous);
+                if ($promise) {
+                    return $promise->then(function ($resolved) use ($callback, $value) {
+                        return $callback($resolved, $value);
+                    });
+                }
+
+                return $callback($previous, $value);
+            },
+            $initialValue);
     }
 
     /**
@@ -1288,6 +1299,7 @@ class Executor
         &$result
     ) {
         $subFieldNodes = $this->collectSubFields($returnType, $fieldNodes);
+
         return $this->executeFields($returnType, $result, $path, $subFieldNodes);
     }
 
@@ -1315,6 +1327,7 @@ class Executor
             }
             $this->subFieldCache[$returnType][$fieldNodes] = $subFieldNodes;
         }
+
         return $this->subFieldCache[$returnType][$fieldNodes];
     }
 

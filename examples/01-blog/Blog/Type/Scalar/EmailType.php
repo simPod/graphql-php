@@ -60,7 +60,7 @@ class EmailType
         // Note: throwing GraphQL\Error\Error vs \UnexpectedValueException to benefit from GraphQL
         // error location in query:
         if (!$valueNode instanceof StringValueNode) {
-            throw new Error('Query error: Can only parse strings got: ' . $valueNode->kind, [$valueNode]);
+            throw new Error('Query error: Can only parse strings got: ' . $valueNode->getKind(), [$valueNode]);
         }
         if (!filter_var($valueNode->value, FILTER_VALIDATE_EMAIL)) {
             throw new Error("Not a valid email", [$valueNode]);

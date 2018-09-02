@@ -260,7 +260,7 @@ class Visitor
                     throw new \Exception('Invalid AST Node: ' . json_encode($node));
                 }
 
-                $visitFn = self::getVisitFn($visitor, $node->kind, $isLeaving);
+                $visitFn = self::getVisitFn($visitor, $node->getKind(), $isLeaving);
 
                 if ($visitFn) {
                     $result    = call_user_func($visitFn, $node, $key, $parent, $path, $ancestors);
@@ -311,7 +311,7 @@ class Visitor
                 ];
                 $inArray = $node instanceof NodeList || is_array($node);
 
-                $keys  = ($inArray ? $node : $visitorKeys[$node->kind]) ?: [];
+                $keys  = ($inArray ? $node : $visitorKeys[$node->getKind()]) ?: [];
                 $index = -1;
                 $edits = [];
                 if ($parent) {
@@ -388,7 +388,7 @@ class Visitor
 
                     $fn = self::getVisitFn(
                         $visitors[$i],
-                        $node->kind, /* isLeaving */
+                        $node->getKind(), /* isLeaving */
                         false
                     );
 
@@ -416,7 +416,7 @@ class Visitor
                     if (empty($skipping[$i])) {
                         $fn = self::getVisitFn(
                             $visitors[$i],
-                            $node->kind, /* isLeaving */
+                            $node->getKind(), /* isLeaving */
                             true
                         );
 
@@ -449,7 +449,7 @@ class Visitor
         return [
             'enter' => function (Node $node) use ($typeInfo, $visitor) {
                 $typeInfo->enter($node);
-                $fn = self::getVisitFn($visitor, $node->kind, false);
+                $fn = self::getVisitFn($visitor, $node->getKind(), false);
 
                 if ($fn) {
                     $result = call_user_func_array($fn, func_get_args());
@@ -466,7 +466,7 @@ class Visitor
                 return null;
             },
             'leave' => function (Node $node) use ($typeInfo, $visitor) {
-                $fn     = self::getVisitFn($visitor, $node->kind, true);
+                $fn     = self::getVisitFn($visitor, $node->getKind(), true);
                 $result = $fn ? call_user_func_array($fn, func_get_args()) : null;
                 $typeInfo->leave($node);
 

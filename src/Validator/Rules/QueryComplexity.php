@@ -109,7 +109,7 @@ class QueryComplexity extends QuerySecurityRule
 
     private function nodeComplexity(Node $node, $complexity = 0)
     {
-        switch ($node->kind) {
+        switch ($node->getKind()) {
             case NodeKind::FIELD:
                 /** @var FieldNode $node */
                 // default values

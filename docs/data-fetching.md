@@ -148,7 +148,7 @@ $userType = new ObjectType([
   'resolveField' => function(User $user, $args, $context, ResolveInfo $info) {
     switch ($info->fieldName) {
         case 'name':
-          return $user->getName();
+          return $user->name;
         case 'email':
           return $user->getEmail();
         default:

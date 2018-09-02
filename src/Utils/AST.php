@@ -530,7 +530,7 @@ class AST
                     : null;
         }
 
-        throw new Error('Unexpected value kind: ' . $valueNode->kind . '.');
+        throw new Error('Unexpected value kind: ' . $valueNode->getKind() . '.');
     }
 
     /**
@@ -557,7 +557,7 @@ class AST
             return $schema->getType($inputTypeNode->name->value);
         }
 
-        throw new Error('Unexpected type kind: ' . $inputTypeNode->kind . '.');
+        throw new Error('Unexpected type kind: ' . $inputTypeNode->getKind() . '.');
     }
 
     /**
@@ -575,7 +575,7 @@ class AST
                     continue;
                 }
 
-                if (! $operationName || (isset($def->name->value) && $def->name->value === $operationName)) {
+                if (! $operationName || ($def->name !== null && $def->name->value === $operationName)) {
                     return $def->operation;
                 }
             }

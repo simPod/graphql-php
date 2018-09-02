@@ -8,7 +8,9 @@ use GraphQL\Error\Error;
 use GraphQL\Language\AST\NodeKind;
 use GraphQL\Language\AST\OperationDefinitionNode;
 use GraphQL\Language\AST\VariableDefinitionNode;
+use GraphQL\Language\AST\VariableNode;
 use GraphQL\Validator\ValidationContext;
+use function assert;
 use function sprintf;
 
 class NoUnusedVariables extends ValidationRule
@@ -28,10 +30,11 @@ class NoUnusedVariables extends ValidationRule
                 'leave' => function (OperationDefinitionNode $operation) use ($context) {
                     $variableNameUsed = [];
                     $usages           = $context->getRecursiveVariableUsages($operation);
-                    $opName           = $operation->name ? $operation->name->value : null;
+                    $opName           = $operation->name === null ? null : $operation->name->value;
 
                     foreach ($usages as $usage) {
-                        $node                                 = $usage['node'];
+                        $node = $usage['node'];
+                        assert($node instanceof VariableNode);
                         $variableNameUsed[$node->name->value] = true;
                     }
 

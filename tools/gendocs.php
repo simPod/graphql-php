@@ -37,7 +37,7 @@ $entries = [
 function renderClassMethod(ReflectionMethod $method) {
     $args = Utils::map($method->getParameters(), function(ReflectionParameter $p) {
         $type = ltrim($p->getType() . " ");
-        $def = $type . '$' . $p->getName();
+        $def  = $type . '$' . $p->name;
 
         if ($p->isDefaultValueAvailable()) {
             $val = $p->isDefaultValueConstant() ? $p->getDefaultValueConstantName() : $p->getDefaultValue();
@@ -50,8 +50,8 @@ function renderClassMethod(ReflectionMethod $method) {
     if (strlen($argsStr) >= 80) {
         $argsStr = "\n    " . implode(",\n    ", $args) . "\n";
     }
-    $def = "function {$method->getName()}($argsStr)";
-    $def = $method->isStatic() ? "static $def" : $def;
+    $def      = "function {$method->name}($argsStr)";
+    $def      = $method->isStatic() ? "static $def" : $def;
     $docBlock = unpadDocblock($method->getDocComment());
 
     return <<<TEMPLATE
@@ -67,7 +67,7 @@ function renderConstant($value, $name) {
 }
 
 function renderProp(ReflectionProperty $prop) {
-    $signature = implode(" ", Reflection::getModifierNames($prop->getModifiers())) . ' $' . $prop->getName() . ';';
+    $signature = implode(" ", Reflection::getModifierNames($prop->getModifiers())) . ' $' . $prop->name . ';';
     return unpadDocblock($prop->getDocComment()) . "\n" . $signature;
 }
 
@@ -106,7 +106,7 @@ function renderClass(ReflectionClass $class, $options) {
     }
 
     return <<<TEMPLATE
-# {$class->getName()}
+# {$class->name}
 {$classDocs}
 
 $content

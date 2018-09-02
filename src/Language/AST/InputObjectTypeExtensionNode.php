@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace GraphQL\Language\AST;
 
-class InputObjectTypeExtensionNode extends Node implements TypeExtensionNode
+class InputObjectTypeExtensionNode extends BaseNode implements TypeExtensionNode
 {
-    /** @var string */
-    public $kind = NodeKind::INPUT_OBJECT_TYPE_EXTENSION;
-
     /** @var NameNode */
     public $name;
 
@@ -17,4 +14,14 @@ class InputObjectTypeExtensionNode extends Node implements TypeExtensionNode
 
     /** @var InputValueDefinitionNode[]|null */
     public $fields;
+
+    /**
+     * @param (string|NameNode|NodeList|SelectionSetNode|Location|null)[] $vars
+     */
+    public function __construct(array $vars)
+    {
+        $this->kind = NodeKind::INPUT_OBJECT_TYPE_EXTENSION;
+
+        parent::__construct($vars);
+    }
 }

@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace GraphQL\Language\AST;
 
-class EnumTypeExtensionNode extends Node implements TypeExtensionNode
+class EnumTypeExtensionNode extends BaseNode implements TypeExtensionNode
 {
-    /** @var string */
-    public $kind = NodeKind::ENUM_TYPE_EXTENSION;
-
     /** @var NameNode */
     public $name;
 
@@ -17,4 +14,14 @@ class EnumTypeExtensionNode extends Node implements TypeExtensionNode
 
     /** @var EnumValueDefinitionNode[]|null */
     public $values;
+
+    /**
+     * @param (string|NameNode|NodeList|SelectionSetNode|Location|null)[] $vars
+     */
+    public function __construct(array $vars)
+    {
+        $this->kind = NodeKind::ENUM_TYPE_EXTENSION;
+
+        parent::__construct($vars);
+    }
 }

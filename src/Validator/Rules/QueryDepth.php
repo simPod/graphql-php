@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace GraphQL\Validator\Rules;
 
 use GraphQL\Error\Error;
+use GraphQL\Language\AST\FieldNode;
+use GraphQL\Language\AST\FragmentSpreadNode;
+use GraphQL\Language\AST\InlineFragmentNode;
 use GraphQL\Language\AST\Node;
 use GraphQL\Language\AST\NodeKind;
 use GraphQL\Language\AST\OperationDefinitionNode;
@@ -57,7 +60,7 @@ class QueryDepth extends QuerySecurityRule
 
     private function nodeDepth(Node $node, $depth = 0, $maxDepth = 0)
     {
-        switch ($node->kind) {
+        switch ($node->getKind()) {
             case NodeKind::FIELD:
                 /** @var FieldNode $node */
                 // node has children?

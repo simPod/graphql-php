@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace GraphQL\Language\AST;
 
-class ObjectTypeExtensionNode extends Node implements TypeExtensionNode
+class ObjectTypeExtensionNode extends BaseNode implements TypeExtensionNode
 {
-    /** @var string */
-    public $kind = NodeKind::OBJECT_TYPE_EXTENSION;
-
     /** @var NameNode */
     public $name;
 
@@ -20,4 +17,14 @@ class ObjectTypeExtensionNode extends Node implements TypeExtensionNode
 
     /** @var FieldDefinitionNode[] */
     public $fields;
+
+    /**
+     * @param (string|NameNode|NodeList|SelectionSetNode|Location|null)[] $vars
+     */
+    public function __construct(array $vars)
+    {
+        $this->kind = NodeKind::OBJECT_TYPE_EXTENSION;
+
+        parent::__construct($vars);
+    }
 }

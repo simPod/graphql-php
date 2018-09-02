@@ -247,7 +247,7 @@ class TypeInfo
         // any assumptions of a valid schema to ensure runtime types are properly
         // checked before continuing since TypeInfo is used as part of validation
         // which occurs before guarantees of schema and document validity.
-        switch ($node->kind) {
+        switch ($node->getKind()) {
             case NodeKind::SELECTION_SET:
                 $namedType               = Type::getNamedType($this->getType());
                 $this->parentTypeStack[] = Type::isCompositeType($namedType) ? $namedType : null;
@@ -448,7 +448,7 @@ class TypeInfo
 
     public function leave(Node $node)
     {
-        switch ($node->kind) {
+        switch ($node->getKind()) {
             case NodeKind::SELECTION_SET:
                 array_pop($this->parentTypeStack);
                 break;

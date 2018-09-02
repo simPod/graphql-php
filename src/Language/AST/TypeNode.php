@@ -9,6 +9,6 @@ namespace GraphQL\Language\AST;
  * | ListTypeNode
  * | NonNullTypeNode
  */
-interface TypeNode
+interface TypeNode extends Node
 {
 }

@@ -9,6 +9,6 @@ namespace GraphQL\Language\AST;
  *   | ExecutableDefinitionNode
  *   | TypeSystemDefinitionNode; // experimental non-spec addition.
  */
-interface DefinitionNode
+interface DefinitionNode extends Node
 {
 }

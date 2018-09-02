@@ -16,15 +16,6 @@ class NodeList implements \ArrayAccess, \IteratorAggregate, \Countable
     private $nodes;
 
     /**
-     * @param Node[]|mixed[] $nodes
-     * @return static
-     */
-    public static function create(array $nodes)
-    {
-        return new static($nodes);
-    }
-
-    /**
      *
      * @param Node[]|mixed[] $nodes
      */
@@ -34,27 +25,21 @@ class NodeList implements \ArrayAccess, \IteratorAggregate, \Countable
     }
 
     /**
+     * @param Node[]|mixed[] $nodes
+     * @return static
+     */
+    public static function create(array $nodes)
+    {
+        return new static($nodes);
+    }
+
+    /**
      * @param mixed $offset
      * @return bool
      */
     public function offsetExists($offset)
     {
         return isset($this->nodes[$offset]);
-    }
-
-    /**
-     * @param mixed $offset
-     * @return mixed
-     */
-    public function offsetGet($offset)
-    {
-        $item = $this->nodes[$offset];
-
-        if (is_array($item) && isset($item['kind'])) {
-            $this->nodes[$offset] = $item = AST::fromArray($item);
-        }
-
-        return $item;
     }
 
     /**
@@ -97,6 +82,7 @@ class NodeList implements \ArrayAccess, \IteratorAggregate, \Countable
         if ($list instanceof self) {
             $list = $list->nodes;
         }
+
         return new NodeList(array_merge($this->nodes, $list));
     }
 
@@ -109,6 +95,21 @@ class NodeList implements \ArrayAccess, \IteratorAggregate, \Countable
         for ($i = 0; $i < $count; $i++) {
             yield $this->offsetGet($i);
         }
+    }
+
+    /**
+     * @param mixed $offset
+     * @return mixed
+     */
+    public function offsetGet($offset)
+    {
+        $item = $this->nodes[$offset];
+
+        if (is_array($item) && isset($item['kind'])) {
+            $this->nodes[$offset] = $item = AST::fromArray($item);
+        }
+
+        return $item;
     }
 
     /**

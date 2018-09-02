@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace GraphQL\Language\AST;
 
-class FieldNode extends Node implements SelectionNode
+class FieldNode extends BaseNode implements SelectionNode
 {
-    /** @var string */
-    public $kind = NodeKind::FIELD;
-
     /** @var NameNode */
     public $name;
 
@@ -23,4 +20,14 @@ class FieldNode extends Node implements SelectionNode
 
     /** @var SelectionSetNode|null */
     public $selectionSet;
+
+    /**
+     * @param (string|NameNode|NodeList|SelectionSetNode|Location|null)[] $vars
+     */
+    public function __construct(array $vars)
+    {
+        $this->kind = NodeKind::FIELD;
+
+        parent::__construct($vars);
+    }
 }

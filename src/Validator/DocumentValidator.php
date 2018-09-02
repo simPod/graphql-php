@@ -227,7 +227,7 @@ class DocumentValidator
      */
     public static function addRule(ValidationRule $rule)
     {
-        self::$rules[$rule->getName()] = $rule;
+        self::$rules[$rule->name] = $rule;
     }
 
     public static function isError($value)

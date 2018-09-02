@@ -46,6 +46,7 @@ use GraphQL\Language\AST\StringValueNode;
 use GraphQL\Language\AST\UnionTypeDefinitionNode;
 use GraphQL\Language\AST\UnionTypeExtensionNode;
 use GraphQL\Language\AST\VariableDefinitionNode;
+use GraphQL\Language\AST\VariableNode;
 use GraphQL\Utils\Utils;
 use function count;
 use function implode;
@@ -95,10 +96,10 @@ class Printer
             [
                 'leave' => [
                     NodeKind::NAME => function (Node $node) {
-                        return '' . $node->value;
+                        return $node;
                     },
 
-                    NodeKind::VARIABLE => function ($node) {
+                    NodeKind::VARIABLE => function (VariableNode $node) {
                         return '$' . $node->name;
                     },
 

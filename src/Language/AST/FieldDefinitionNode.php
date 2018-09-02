@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace GraphQL\Language\AST;
 
-class FieldDefinitionNode extends Node
+class FieldDefinitionNode extends BaseNode
 {
-    /** @var string */
-    public $kind = NodeKind::FIELD_DEFINITION;
-
     /** @var NameNode */
     public $name;
 
@@ -23,4 +20,14 @@ class FieldDefinitionNode extends Node
 
     /** @var StringValueNode|null */
     public $description;
+
+    /**
+     * @param (string|NameNode|NodeList|SelectionSetNode|Location|null)[] $vars
+     */
+    public function __construct(array $vars)
+    {
+        $this->kind = NodeKind::FIELD_DEFINITION;
+
+        parent::__construct($vars);
+    }
 }

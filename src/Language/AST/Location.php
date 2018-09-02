@@ -48,19 +48,6 @@ class Location
      */
     public $source;
 
-    /**
-     * @param int $start
-     * @param int $end
-     * @return static
-     */
-    public static function create($start, $end)
-    {
-        $tmp        = new static();
-        $tmp->start = $start;
-        $tmp->end   = $end;
-        return $tmp;
-    }
-
     public function __construct(?Token $startToken = null, ?Token $endToken = null, ?Source $source = null)
     {
         $this->startToken = $startToken;
@@ -73,5 +60,19 @@ class Location
 
         $this->start = $startToken->start;
         $this->end   = $endToken->end;
+    }
+
+    /**
+     * @param int $start
+     * @param int $end
+     * @return static
+     */
+    public static function create($start, $end)
+    {
+        $tmp        = new static();
+        $tmp->start = $start;
+        $tmp->end   = $end;
+
+        return $tmp;
     }
 }

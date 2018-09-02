@@ -19,7 +19,7 @@ class TestUtils
     public static function nodeToArray(Node $node) : array
     {
         $result = [
-            'kind' => $node->kind,
+            'kind' => $node->getKind(),
             'loc'  => self::locationToArray($node->loc),
         ];
 

@@ -240,7 +240,7 @@ class ASTDefinitionBuilder
         if (! $def) {
             throw new Error('def must be defined.');
         }
-        switch ($def->kind) {
+        switch ($def->getKind()) {
             case NodeKind::OBJECT_TYPE_DEFINITION:
                 return $this->makeTypeDef($def);
             case NodeKind::INTERFACE_TYPE_DEFINITION:
@@ -254,7 +254,7 @@ class ASTDefinitionBuilder
             case NodeKind::INPUT_OBJECT_TYPE_DEFINITION:
                 return $this->makeInputObjectDef($def);
             default:
-                throw new Error(sprintf('Type kind of %s not supported.', $def->kind));
+                throw new Error(sprintf('Type kind of %s not supported.', $def->getKind()));
         }
     }
 
@@ -430,7 +430,7 @@ class ASTDefinitionBuilder
         if (! $def) {
             throw new Error('def must be defined.');
         }
-        switch ($def->kind) {
+        switch ($def->getKind()) {
             case NodeKind::OBJECT_TYPE_DEFINITION:
                 return new ObjectType($config);
             case NodeKind::INTERFACE_TYPE_DEFINITION:
@@ -444,7 +444,7 @@ class ASTDefinitionBuilder
             case NodeKind::INPUT_OBJECT_TYPE_DEFINITION:
                 return new InputObjectType($config);
             default:
-                throw new Error(sprintf('Type kind of %s not supported.', $def->kind));
+                throw new Error(sprintf('Type kind of %s not supported.', $def->getKind()));
         }
     }
 
@@ -455,7 +455,7 @@ class ASTDefinitionBuilder
     private function getNamedTypeNode(TypeNode $typeNode)
     {
         $namedType = $typeNode;
-        while ($namedType->kind === NodeKind::LIST_TYPE || $namedType->kind === NodeKind::NON_NULL_TYPE) {
+        while ($namedType->getKind() === NodeKind::LIST_TYPE || $namedType->getKind() === NodeKind::NON_NULL_TYPE) {
             $namedType = $namedType->type;
         }
 
@@ -468,10 +468,10 @@ class ASTDefinitionBuilder
      */
     private function buildWrappedType(Type $innerType, TypeNode $inputTypeNode)
     {
-        if ($inputTypeNode->kind === NodeKind::LIST_TYPE) {
+        if ($inputTypeNode->getKind() === NodeKind::LIST_TYPE) {
             return Type::listOf($this->buildWrappedType($innerType, $inputTypeNode->type));
         }
-        if ($inputTypeNode->kind === NodeKind::NON_NULL_TYPE) {
+        if ($inputTypeNode->getKind() === NodeKind::NON_NULL_TYPE) {
             $wrappedType = $this->buildWrappedType($innerType, $inputTypeNode->type);
 
             return Type::nonNull(NonNull::assertNullableType($wrappedType));
