@@ -18,7 +18,7 @@ use function sprintf;
 class SingleFieldSubscription extends ValidationRule
 {
     /**
-     * @return array<string, callable>
+     * @return array<string, callable():VisitorOperation>
      */
     public function getVisitor(ValidationContext $context) : array
     {
