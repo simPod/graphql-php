@@ -86,6 +86,18 @@ class PrinterTest extends TestCase
 }
 ';
         self::assertEquals($expected, Printer::doPrint($mutationAstWithArtifacts));
+
+        $queryWithNonNullVariable = Parser::parse(
+            'query ($var: ID!) { a(arg: $var) { __typename } }
+'
+        );
+        $expected                 = 'query ($var: ID!) {
+  a(arg: $var) {
+    __typename
+  }
+}
+';
+        self::assertEquals($expected, Printer::doPrint($queryWithNonNullVariable));
     }
 
     /**
