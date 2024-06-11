@@ -1353,11 +1353,11 @@ class ReferenceExecutor implements ExecutorImplementation
             $fieldPath = $path;
             $fieldPath[] = $responseName;
 
-            $fieldNode = $fieldNodes[0];
-            assert($fieldNode instanceof FieldNode, '$fieldNodes is non-empty');
+//            $fieldNode = $fieldNodes[0];
+//            assert($fieldNode instanceof FieldNode, '$fieldNodes is non-empty');
 
             $fieldUnaliasedPath = $unaliasedPath;
-            $fieldUnaliasedPath[] = $fieldNode->name->value;
+//            $fieldUnaliasedPath[] = $fieldNode->name->value;
 
             $result = $this->resolveField($parentType, $rootValue, $fieldNodes, $fieldPath, $fieldUnaliasedPath, $this->maybeScopeContext($contextValue));
             if ($result === static::$UNDEFINED) {
