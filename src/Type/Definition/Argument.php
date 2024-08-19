@@ -114,6 +114,8 @@ class Argument
     {
         $error = Utils::isValidNameError($this->name);
         if ($error !== null) {
+            assert($parentType instanceof NamedType);
+
             throw new InvariantViolation("{$parentType->name}.{$parentField->name}({$this->name}:) {$error->getMessage()}");
         }
 
