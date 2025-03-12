@@ -56,6 +56,13 @@ jobs:
       contents: write
 
     steps:
+      - name: Check if GA_PAT is empty
+        run: |
+          if [[ -z "${{ secrets.GA_PAT }}" ]]; then
+            echo "GA_PAT is empty or not set"
+          else
+            echo "GA_PAT is set"
+          fi
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
