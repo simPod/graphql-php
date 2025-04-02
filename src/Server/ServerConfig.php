@@ -48,14 +48,12 @@ class ServerConfig
      * @throws InvariantViolation
      */
     public static function create(
-        array $config = []): self
-    {
+        array $config = []
+    ): self {
         $instance = new static();
         foreach ($config as $key => $value) {
-            switch ($key      ) {
+            switch ($key) {
                 case 'schema':
-
-
                     $instance->setSchema($value);
                     break;
                 case 'rootValue':
@@ -65,16 +63,17 @@ class ServerConfig
                     $instance->setContext($value);
                     break;
                 case 'fieldResolver':
-                    $instance->setFieldResolver($value
+                    $instance->setFieldResolver(
+                        $value
                     );
                     break;
                 case 'validationRules':
                     $instance->setValidationRules($value);
                     break;
                 case 'queryBatching':
-
                     $instance->setQueryBatching(
-                        $value);
+                        $value
+                    );
                     break;
                 case 'debugFlag':
                     $instance->setDebugFlag($value);
@@ -218,7 +217,7 @@ class ServerConfig
     public function setValidationRules($validationRules): self
     {
         // @phpstan-ignore-next-line necessary until we can use proper union types
-        if (! \is_array($validationRules) && ! \is_callable($validationRules) && $validationRules !== null) {
+        if (! is_array($validationRules) && ! is_callable($validationRules) && $validationRules !== null) {
             $invalidValidationRules = Utils::printSafe($validationRules);
             throw new InvariantViolation("Server config expects array of validation rules or callable returning such array, but got {$invalidValidationRules}");
         }
