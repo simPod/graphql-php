@@ -203,11 +203,7 @@ class SchemaExtender
         return new Schema($schemaConfig);
     }
 
-    /**
-     * @param Type&NamedType $type
-     *
-     * @return array<TypeExtensionNode>|null
-     */
+    /** @return array<TypeExtensionNode>|null */
     protected function extensionASTNodes(NamedType $type): ?array
     {
         return [
