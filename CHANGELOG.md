@@ -9,6 +9,12 @@ You can find and compare releases at the [GitHub release page](https://github.co
 
 ## Unreleased
 
+## v15.34.0
+
+### Added
+
+- Make Promise and PromiseAdapter generic over the adopted promise type https://github.com/webonyx/graphql-php/pull/1941
+
 ## v15.33.1
 
 ### Fixed
