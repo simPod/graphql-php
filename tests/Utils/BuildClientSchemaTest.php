@@ -521,16 +521,40 @@ SDL;
             """So sickening"""
             MAUVE @deprecated(reason: "No longer in fashion")
           }
-    
+
+          input ColorInput {
+            oldColor: String @deprecated(reason: "Use color")
+            color: String
+          }
+     
           type Query {
             """This is a shiny string field"""
             shinyString: String
-    
+     
             """This is a deprecated string field"""
             deprecatedString: String @deprecated(reason: "Use shinyString")
+            paint(oldColor: String @deprecated(reason: "Use color"), color: String, input: ColorInput): Color
             color: Color
           }
         ');
+    }
+
+    /** it('prints deprecated input values from a client schema', () => {. */
+    public function testPrintsDeprecatedInputValuesFromClientSchema(): void
+    {
+        $sdl = <<<SDL
+input Filter {
+  oldTerm: String @deprecated(reason: "Use term")
+  term: String
+}
+
+type Query {
+  search(oldQuery: String @deprecated(reason: "Use query"), query: String, filter: Filter): String
+}
+
+SDL;
+
+        self::assertSame($sdl, SchemaPrinter::doPrint(self::clientSchemaFromSDL($sdl)));
     }
 
     /** it('builds a schema with empty deprecation reasons', () => {. */
