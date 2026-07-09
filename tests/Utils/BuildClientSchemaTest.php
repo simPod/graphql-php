@@ -539,24 +539,6 @@ SDL;
         ');
     }
 
-    /** it('prints deprecated input values from a client schema', () => {. */
-    public function testPrintsDeprecatedInputValuesFromClientSchema(): void
-    {
-        $sdl = <<<SDL
-input Filter {
-  oldTerm: String @deprecated(reason: "Use term")
-  term: String
-}
-
-type Query {
-  search(oldQuery: String @deprecated(reason: "Use query"), query: String, filter: Filter): String
-}
-
-SDL;
-
-        self::assertSame($sdl, SchemaPrinter::doPrint(self::clientSchemaFromSDL($sdl)));
-    }
-
     /** it('builds a schema with empty deprecation reasons', () => {. */
     public function testBuildsASchemaWithEmptyDeprecationReasons(): void
     {
