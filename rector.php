@@ -38,6 +38,7 @@ return static function (Rector\Config\RectorConfig $rectorConfig): void {
             __DIR__ . '/tests/TestCaseBase.php', // Array output may differ between tested PHP versions, assertEquals smooths over this
         ],
         Rector\PHPUnit\PHPUnit60\Rector\ClassMethod\AddDoesNotPerformAssertionToNonAssertingTestRector::class, // False-positive
+        Rector\DeadCode\Rector\ClassMethod\RemoveDuplicatedReturnSelfDocblockRector::class, // Overly eager on removing static or $this
     ]);
     $rectorConfig->paths([
         __DIR__ . '/benchmarks',
