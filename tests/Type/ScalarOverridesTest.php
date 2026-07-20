@@ -670,6 +670,21 @@ final class ScalarOverridesTest extends TestCase
         self::assertSame($extraType, $schema->getTypeMap()['Extra']);
     }
 
+    public function testSetScalarOverridesNullResetsOverrides(): void
+    {
+        $uppercaseString = self::createUppercaseString();
+
+        $config = SchemaConfig::create()
+            ->setQuery(self::createQueryType())
+            ->setScalarOverrides([$uppercaseString]);
+
+        self::assertSame([Type::STRING => $uppercaseString], $config->getScalarOverrides());
+
+        $config->setScalarOverrides(null);
+
+        self::assertNull($config->getScalarOverrides());
+    }
+
     public function testSetScalarOverridesRejectsNonScalarTypes(): void
     {
         $config = new SchemaConfig();
