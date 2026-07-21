@@ -2,28 +2,18 @@
 
 namespace GraphQL\Utils;
 
-use function array_key_exists;
-use function array_search;
-use function array_splice;
-use ArrayAccess;
-use InvalidArgumentException;
-use function is_array;
-use function is_float;
-use function is_int;
-use function is_object;
-use function is_string;
-use ReturnTypeWillChange;
-use SplObjectStorage;
-
 /**
  * Similar to PHP array, but allows any type of data to act as key (including arrays, objects, scalars).
  *
  * When storing array as key, access and modification is O(N). Avoid if possible.
  *
  * @template TValue of mixed
- * @implements ArrayAccess<mixed, TValue>
+ *
+ * @implements \ArrayAccess<mixed, TValue>
+ *
+ * @see \GraphQL\Tests\Utils\MixedStoreTest
  */
-class MixedStore implements ArrayAccess
+class MixedStore implements \ArrayAccess
 {
     /** @var array<TValue> */
     private array $standardStore = [];
@@ -31,8 +21,8 @@ class MixedStore implements ArrayAccess
     /** @var array<TValue> */
     private array $floatStore = [];
 
-    /** @var SplObjectStorage<object, TValue> */
-    private SplObjectStorage $objectStore;
+    /** @var \SplObjectStorage<object, TValue> */
+    private \SplObjectStorage $objectStore;
 
     /** @var array<int, array<mixed>> */
     private array $arrayKeys = [];
@@ -44,32 +34,30 @@ class MixedStore implements ArrayAccess
     private ?array $lastArrayKey = null;
 
     /** @var TValue|null */
-    private $lastArrayValue = null;
+    private $lastArrayValue;
 
     /** @var TValue|null */
-    private $nullValue = null;
+    private $nullValue;
 
     private bool $nullValueIsSet = false;
 
     /** @var TValue|null */
-    private $trueValue = null;
+    private $trueValue;
 
     private bool $trueValueIsSet = false;
 
     /** @var TValue|null */
-    private $falseValue = null;
+    private $falseValue;
 
     private bool $falseValueIsSet = false;
 
     public function __construct()
     {
-        $this->objectStore = new SplObjectStorage();
+        $this->objectStore = new \SplObjectStorage();
     }
 
-    /**
-     * @param mixed $offset
-     */
-    #[ReturnTypeWillChange]
+    /** @param mixed $offset */
+    #[\ReturnTypeWillChange]
     public function offsetExists($offset): bool
     {
         if ($offset === false) {
@@ -115,7 +103,7 @@ class MixedStore implements ArrayAccess
      *
      * @return TValue|null
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function offsetGet($offset)
     {
         if ($offset === true) {
@@ -159,10 +147,12 @@ class MixedStore implements ArrayAccess
     }
 
     /**
-     * @param mixed  $offset
+     * @param mixed $offset
      * @param TValue $value
+     *
+     * @throws \InvalidArgumentException
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function offsetSet($offset, $value): void
     {
         if ($offset === false) {
@@ -184,14 +174,13 @@ class MixedStore implements ArrayAccess
             $this->nullValue = $value;
             $this->nullValueIsSet = true;
         } else {
-            throw new InvalidArgumentException('Unexpected offset type: ' . Utils::printSafe($offset));
+            $unexpectedOffset = Utils::printSafe($offset);
+            throw new \InvalidArgumentException("Unexpected offset type: {$unexpectedOffset}");
         }
     }
 
-    /**
-     * @param mixed $offset
-     */
-    #[ReturnTypeWillChange]
+    /** @param mixed $offset */
+    #[\ReturnTypeWillChange]
     public function offsetUnset($offset): void
     {
         if ($offset === true) {

@@ -2,93 +2,109 @@
 
 namespace GraphQL\Type\Definition;
 
-use function array_keys;
-use function array_merge;
 use GraphQL\Error\InvariantViolation;
 use GraphQL\Type\Introspection;
+use GraphQL\Type\SchemaConfig;
 use GraphQL\Utils\Utils;
-use function implode;
-use JsonSerializable;
-use ReturnTypeWillChange;
 
 /**
- * Registry of standard GraphQL types and base class for all other types.
+ * Registry of built-in GraphQL types and base class for all other types.
  */
-abstract class Type implements JsonSerializable
+abstract class Type implements \JsonSerializable
 {
-    public const STRING = 'String';
     public const INT = 'Int';
-    public const BOOLEAN = 'Boolean';
     public const FLOAT = 'Float';
+    public const STRING = 'String';
+    public const BOOLEAN = 'Boolean';
     public const ID = 'ID';
 
-    /** @var array<string, ScalarType> */
-    protected static array $standardTypes;
-
-    /** @var array<string, Type> */
-    private static array $builtInTypes;
+    /** @var list<string> */
+    public const BUILT_IN_SCALAR_NAMES = [
+        self::INT,
+        self::FLOAT,
+        self::STRING,
+        self::BOOLEAN,
+        self::ID,
+    ];
 
     /**
-     * @api
+     * @deprecated use {@see Type::BUILT_IN_SCALAR_NAMES}
+     *
+     * @var list<string>
      */
-    public static function id(): ScalarType
-    {
-        if (! isset(static::$standardTypes[self::ID])) {
-            static::$standardTypes[self::ID] = new IDType();
-        }
-
-        return static::$standardTypes[self::ID];
-    }
+    public const STANDARD_TYPE_NAMES = self::BUILT_IN_SCALAR_NAMES;
 
     /**
-     * @api
+     * Names of all built-in types: built-in scalars and introspection types.
+     *
+     * @see Type::BUILT_IN_SCALAR_NAMES for just the built-in scalar names.
+     *
+     * @var list<string>
      */
-    public static function string(): ScalarType
-    {
-        if (! isset(static::$standardTypes[self::STRING])) {
-            static::$standardTypes[self::STRING] = new StringType();
-        }
+    public const BUILT_IN_TYPE_NAMES = [
+        ...self::BUILT_IN_SCALAR_NAMES,
+        ...Introspection::TYPE_NAMES,
+    ];
 
-        return static::$standardTypes[self::STRING];
-    }
+    /** @var array<string, ScalarType>|null */
+    protected static ?array $builtInScalars;
 
-    /**
-     * @api
-     */
-    public static function boolean(): ScalarType
-    {
-        if (! isset(static::$standardTypes[self::BOOLEAN])) {
-            static::$standardTypes[self::BOOLEAN] = new BooleanType();
-        }
-
-        return static::$standardTypes[self::BOOLEAN];
-    }
+    /** @var array<string, Type&NamedType>|null */
+    protected static ?array $builtInTypes;
 
     /**
+     * Returns the built-in Int scalar type.
+     *
      * @api
      */
     public static function int(): ScalarType
     {
-        if (! isset(static::$standardTypes[self::INT])) {
-            static::$standardTypes[self::INT] = new IntType();
-        }
-
-        return static::$standardTypes[self::INT];
+        return static::$builtInScalars[self::INT] ??= new IntType(); // @phpstan-ignore missingType.checkedException (static configuration is known to be correct)
     }
 
     /**
+     * Returns the built-in Float scalar type.
+     *
      * @api
      */
     public static function float(): ScalarType
     {
-        if (! isset(static::$standardTypes[self::FLOAT])) {
-            static::$standardTypes[self::FLOAT] = new FloatType();
-        }
-
-        return static::$standardTypes[self::FLOAT];
+        return static::$builtInScalars[self::FLOAT] ??= new FloatType(); // @phpstan-ignore missingType.checkedException (static configuration is known to be correct)
     }
 
     /**
+     * Returns the built-in String scalar type.
+     *
+     * @api
+     */
+    public static function string(): ScalarType
+    {
+        return static::$builtInScalars[self::STRING] ??= new StringType(); // @phpstan-ignore missingType.checkedException (static configuration is known to be correct)
+    }
+
+    /**
+     * Returns the built-in Boolean scalar type.
+     *
+     * @api
+     */
+    public static function boolean(): ScalarType
+    {
+        return static::$builtInScalars[self::BOOLEAN] ??= new BooleanType(); // @phpstan-ignore missingType.checkedException (static configuration is known to be correct)
+    }
+
+    /**
+     * Returns the built-in ID scalar type.
+     *
+     * @api
+     */
+    public static function id(): ScalarType
+    {
+        return static::$builtInScalars[self::ID] ??= new IDType(); // @phpstan-ignore missingType.checkedException (static configuration is known to be correct)
+    }
+
+    /**
+     * Wraps the given type in a list type.
+     *
      * @template T of Type
      *
      * @param T|callable():T $type
@@ -103,75 +119,127 @@ abstract class Type implements JsonSerializable
     }
 
     /**
-     * @param (NullableType&Type)|callable():(NullableType&Type) $type
+     * Wraps the given type in a non-null type.
+     *
+     * @param NonNull|(NullableType&Type)|callable():(NullableType&Type) $type
      *
      * @api
      */
     public static function nonNull($type): NonNull
     {
+        if ($type instanceof NonNull) {
+            return $type;
+        }
+
         return new NonNull($type);
     }
 
     /**
-     * Returns all builtin in types including base scalar and introspection types.
+     * Returns all built-in types: built-in scalars and introspection types.
      *
-     * @return array<string, Type>
+     * @api
+     *
+     * @return array<string, Type&NamedType>
      */
-    public static function getAllBuiltInTypes(): array
+    public static function builtInTypes(): array
     {
-        if (! isset(self::$builtInTypes)) {
-            self::$builtInTypes = array_merge(
-                Introspection::getTypes(),
-                self::getStandardTypes()
-            );
-        }
-
-        return self::$builtInTypes;
+        return self::$builtInTypes ??= array_merge(
+            Introspection::getTypes(),
+            self::builtInScalars()
+        );
     }
 
     /**
-     * Returns all builtin scalar types.
+     * Returns all built-in scalar types.
+     *
+     * @api
+     *
+     * @return array<string, ScalarType>
+     */
+    public static function builtInScalars(): array
+    {
+        return [
+            self::INT => static::int(),
+            self::FLOAT => static::float(),
+            self::STRING => static::string(),
+            self::BOOLEAN => static::boolean(),
+            self::ID => static::id(),
+        ];
+    }
+
+    /**
+     * Returns all built-in scalar types.
+     *
+     * @deprecated use {@see Type::builtInScalars()}
      *
      * @return array<string, ScalarType>
      */
     public static function getStandardTypes(): array
     {
-        return [
-            self::ID => static::id(),
-            self::STRING => static::string(),
-            self::FLOAT => static::float(),
-            self::INT => static::int(),
-            self::BOOLEAN => static::boolean(),
-        ];
+        return self::builtInScalars();
     }
 
     /**
+     * Allows partially or completely overriding the standard types globally.
+     *
+     * @deprecated prefer per-schema scalar overrides via {@see SchemaConfig::$types} or {@see SchemaConfig::$typeLoader}
+     *
      * @param array<ScalarType> $types
+     *
+     * @throws InvariantViolation
      */
     public static function overrideStandardTypes(array $types): void
     {
-        $standardTypes = self::getStandardTypes();
+        // Reset caches that might contain instances of built-in scalars
+        static::$builtInTypes = null;
+        Introspection::resetCachedInstances();
+        Directive::resetCachedInstances();
+
         foreach ($types as $type) {
             // @phpstan-ignore-next-line generic type is not enforced by PHP
             if (! $type instanceof ScalarType) {
                 $typeClass = ScalarType::class;
                 $notType = Utils::printSafe($type);
-
                 throw new InvariantViolation("Expecting instance of {$typeClass}, got {$notType}");
             }
 
-            if (! isset($type->name, $standardTypes[$type->name])) {
-                $standardTypeNames = implode(', ', array_keys($standardTypes));
-                $notStandardTypeName = Utils::printSafe($type->name ?? null);
-
+            if (! self::isBuiltInScalarName($type->name)) {
+                $standardTypeNames = implode(', ', self::BUILT_IN_SCALAR_NAMES);
+                $notStandardTypeName = Utils::printSafe($type->name);
                 throw new InvariantViolation("Expecting one of the following names for a standard type: {$standardTypeNames}; got {$notStandardTypeName}");
             }
 
-            static::$standardTypes[$type->name] = $type;
+            static::$builtInScalars[$type->name] = $type;
         }
     }
 
     /**
+     * Determines if the given type is a built-in scalar (Int, Float, String, Boolean, ID).
+     *
+     * Does not unwrap NonNull/List wrappers — checks the type instance directly.
+     * ScalarType is a NamedType, so {@see Type::getNamedType()} is unnecessary.
+     *
+     * @param mixed $type
+     *
+     * @phpstan-assert-if-true ScalarType $type
+     *
+     * @api
+     */
+    public static function isBuiltInScalar($type): bool
+    {
+        return $type instanceof ScalarType
+            && self::isBuiltInScalarName($type->name);
+    }
+
+    /** Checks if the given name is one of the built-in scalar type names (ID, String, Int, Float, Boolean). */
+    public static function isBuiltInScalarName(string $name): bool
+    {
+        return in_array($name, self::BUILT_IN_SCALAR_NAMES, true);
+    }
+
+    /**
+     * Determines if the given type is an input type.
+     *
      * @param mixed $type
      *
      * @api
@@ -182,7 +250,11 @@ abstract class Type implements JsonSerializable
     }
 
     /**
+     * Returns the underlying named type of the given type.
+     *
      * @return (Type&NamedType)|null
+     *
+     * @phpstan-return ($type is null ? null : Type&NamedType)
      *
      * @api
      */
@@ -198,6 +270,8 @@ abstract class Type implements JsonSerializable
     }
 
     /**
+     * Determines if the given type is an output type.
+     *
      * @param mixed $type
      *
      * @api
@@ -208,6 +282,8 @@ abstract class Type implements JsonSerializable
     }
 
     /**
+     * Determines if the given type is a leaf type.
+     *
      * @param mixed $type
      *
      * @api
@@ -218,6 +294,8 @@ abstract class Type implements JsonSerializable
     }
 
     /**
+     * Determines if the given type is a composite type.
+     *
      * @param mixed $type
      *
      * @api
@@ -228,6 +306,8 @@ abstract class Type implements JsonSerializable
     }
 
     /**
+     * Determines if the given type is an abstract type.
+     *
      * @param mixed $type
      *
      * @api
@@ -238,6 +318,8 @@ abstract class Type implements JsonSerializable
     }
 
     /**
+     * Unwraps a potentially non-null type to return the underlying nullable type.
+     *
      * @return Type&NullableType
      *
      * @api
@@ -260,7 +342,7 @@ abstract class Type implements JsonSerializable
         return $this->toString();
     }
 
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function jsonSerialize(): string
     {
         return $this->toString();

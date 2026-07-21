@@ -2,7 +2,7 @@
 
 namespace GraphQL\Type;
 
-use function count;
+use GraphQL\Error\InvariantViolation;
 use GraphQL\Language\AST\SchemaDefinitionNode;
 use GraphQL\Language\AST\SchemaExtensionNode;
 use GraphQL\Type\Definition\Directive;
@@ -26,19 +26,38 @@ use GraphQL\Type\Definition\Type;
  *
  * @see Type, NamedType
  *
- * @phpstan-type TypeLoader callable(string $typeName):((Type&NamedType)|null)
- * @phpstan-type Types array<Type&NamedType>|callable():array<Type&NamedType>
+ * @phpstan-type MaybeLazyObjectType ObjectType|(callable(): (ObjectType|null))|null
+ * @phpstan-type TypeLoader callable(string $typeName): ((Type&NamedType)|null)
+ * @phpstan-type Types iterable<Type&NamedType>|(callable(): iterable<Type&NamedType>)|iterable<(callable(): Type&NamedType)>|(callable(): iterable<(callable(): Type&NamedType)>)
+ * @phpstan-type SchemaConfigOptions array{
+ *   description?: string|null,
+ *   query?: MaybeLazyObjectType,
+ *   mutation?: MaybeLazyObjectType,
+ *   subscription?: MaybeLazyObjectType,
+ *   types?: Types|null,
+ *   directives?: array<Directive>|null,
+ *   typeLoader?: TypeLoader|null,
+ *   assumeValid?: bool|null,
+ *   astNode?: SchemaDefinitionNode|null,
+ *   extensionASTNodes?: array<SchemaExtensionNode>|null,
+ * }
  */
 class SchemaConfig
 {
-    public ?ObjectType $query = null;
+    public ?string $description = null;
 
-    public ?ObjectType $mutation = null;
+    /** @var MaybeLazyObjectType */
+    public $query;
 
-    public ?ObjectType $subscription = null;
+    /** @var MaybeLazyObjectType */
+    public $mutation;
+
+    /** @var MaybeLazyObjectType */
+    public $subscription;
 
     /**
-     * @var array|callable
+     * @var iterable|callable
+     *
      * @phpstan-var Types
      */
     public $types = [];
@@ -48,9 +67,10 @@ class SchemaConfig
 
     /**
      * @var callable|null
+     *
      * @phpstan-var TypeLoader|null
      */
-    public $typeLoader = null;
+    public $typeLoader;
 
     public bool $assumeValid = false;
 
@@ -63,7 +83,9 @@ class SchemaConfig
      * Converts an array of options to instance of SchemaConfig
      * (or just returns empty config when array is not passed).
      *
-     * @param array<string, mixed> $options
+     * @phpstan-param SchemaConfigOptions $options
+     *
+     * @throws InvariantViolation
      *
      * @api
      */
@@ -71,7 +93,10 @@ class SchemaConfig
     {
         $config = new static();
 
-        if (count($options) > 0) {
+        if ($options !== []) {
+            if (isset($options['description'])) {
+                $config->setDescription($options['description']);
+            }
             if (isset($options['query'])) {
                 $config->setQuery($options['query']);
             }
@@ -112,55 +137,90 @@ class SchemaConfig
         return $config;
     }
 
+    /** @api */
+    public function getDescription(): ?string
+    {
+        return $this->description;
+    }
+
+    /** @api */
+    public function setDescription(?string $description): self
+    {
+        $this->description = $description;
+
+        return $this;
+    }
+
     /**
+     * @return MaybeLazyObjectType
+     *
      * @api
      */
-    public function getQuery(): ?ObjectType
+    public function getQuery()
     {
         return $this->query;
     }
 
     /**
+     * @param MaybeLazyObjectType $query
+     *
+     * @throws InvariantViolation
+     *
      * @api
      */
-    public function setQuery(?ObjectType $query): self
+    public function setQuery($query): self
     {
+        $this->assertMaybeLazyObjectType($query);
         $this->query = $query;
 
         return $this;
     }
 
     /**
+     * @return MaybeLazyObjectType
+     *
      * @api
      */
-    public function getMutation(): ?ObjectType
+    public function getMutation()
     {
         return $this->mutation;
     }
 
     /**
+     * @param MaybeLazyObjectType $mutation
+     *
+     * @throws InvariantViolation
+     *
      * @api
      */
-    public function setMutation(?ObjectType $mutation): self
+    public function setMutation($mutation): self
     {
+        $this->assertMaybeLazyObjectType($mutation);
         $this->mutation = $mutation;
 
         return $this;
     }
 
     /**
+     * @return MaybeLazyObjectType
+     *
      * @api
      */
-    public function getSubscription(): ?ObjectType
+    public function getSubscription()
     {
         return $this->subscription;
     }
 
     /**
+     * @param MaybeLazyObjectType $subscription
+     *
+     * @throws InvariantViolation
+     *
      * @api
      */
-    public function setSubscription(?ObjectType $subscription): self
+    public function setSubscription($subscription): self
     {
+        $this->assertMaybeLazyObjectType($subscription);
         $this->subscription = $subscription;
 
         return $this;
@@ -168,6 +228,7 @@ class SchemaConfig
 
     /**
      * @return array|callable
+     *
      * @phpstan-return Types
      *
      * @api
@@ -179,6 +240,7 @@ class SchemaConfig
 
     /**
      * @param array|callable $types
+     *
      * @phpstan-param Types $types
      *
      * @api
@@ -214,6 +276,7 @@ class SchemaConfig
 
     /**
      * @return callable|null $typeLoader
+     *
      * @phpstan-return TypeLoader|null $typeLoader
      *
      * @api
@@ -252,28 +315,42 @@ class SchemaConfig
         return $this->astNode;
     }
 
-    public function setAstNode(SchemaDefinitionNode $astNode): self
+    public function setAstNode(?SchemaDefinitionNode $astNode): self
     {
         $this->astNode = $astNode;
 
         return $this;
     }
 
-    /**
-     * @return array<SchemaExtensionNode>
-     */
+    /** @return array<SchemaExtensionNode> */
     public function getExtensionASTNodes(): array
     {
         return $this->extensionASTNodes;
     }
 
-    /**
-     * @param array<SchemaExtensionNode> $extensionASTNodes
-     */
+    /** @param array<SchemaExtensionNode> $extensionASTNodes */
     public function setExtensionASTNodes(array $extensionASTNodes): self
     {
         $this->extensionASTNodes = $extensionASTNodes;
 
         return $this;
+    }
+
+    /**
+     * @param mixed $maybeLazyObjectType Should be MaybeLazyObjectType
+     *
+     * @throws InvariantViolation
+     */
+    protected function assertMaybeLazyObjectType($maybeLazyObjectType): void
+    {
+        if ($maybeLazyObjectType instanceof ObjectType || is_callable($maybeLazyObjectType) || is_null($maybeLazyObjectType)) {
+            return;
+        }
+
+        $notMaybeLazyObjectType = is_object($maybeLazyObjectType)
+            ? get_class($maybeLazyObjectType)
+            : gettype($maybeLazyObjectType);
+        $objectTypeClass = ObjectType::class;
+        throw new InvariantViolation("Expected instanceof {$objectTypeClass}, a callable that returns such an instance, or null, got: {$notMaybeLazyObjectType}.");
     }
 }

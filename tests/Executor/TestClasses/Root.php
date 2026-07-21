@@ -2,10 +2,9 @@
 
 namespace GraphQL\Tests\Executor\TestClasses;
 
-use Exception;
 use GraphQL\Deferred;
 
-class Root
+final class Root
 {
     public NumberHolder $numberHolder;
 
@@ -26,9 +25,10 @@ class Root
         return $this->numberHolder;
     }
 
+    /** @throws \Exception */
     public function failToChangeTheNumber(): void
     {
-        throw new Exception('Cannot change the number');
+        throw new \Exception('Cannot change the number');
     }
 
     public function promiseAndFailToChangeTheNumber(): Deferred

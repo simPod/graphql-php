@@ -2,16 +2,12 @@
 
 namespace GraphQL\Type\Validation;
 
-use function array_map;
-use function array_pop;
-use function array_slice;
-use function count;
+use GraphQL\Error\InvariantViolation;
 use GraphQL\Language\AST\InputValueDefinitionNode;
 use GraphQL\Type\Definition\InputObjectField;
 use GraphQL\Type\Definition\InputObjectType;
 use GraphQL\Type\Definition\NonNull;
 use GraphQL\Type\SchemaValidationContext;
-use function implode;
 
 class InputObjectCircularRefs
 {
@@ -44,6 +40,8 @@ class InputObjectCircularRefs
      * This does a straight-forward DFS to find cycles.
      * It does not terminate when a cycle was found but continues to explore
      * the graph to find all possible cycles.
+     *
+     * @throws InvariantViolation
      */
     public function validate(InputObjectType $inputObj): void
     {
@@ -71,9 +69,12 @@ class InputObjectCircularRefs
                     } else {
                         $cycleIndex = $this->fieldPathIndexByTypeName[$fieldType->name];
                         $cyclePath = array_slice($this->fieldPath, $cycleIndex);
-                        $fieldNames = array_map(
-                            static fn (InputObjectField $field): string => $field->name,
-                            $cyclePath
+                        $fieldNames = implode(
+                            '.',
+                            array_map(
+                                static fn (InputObjectField $field): string => $field->name,
+                                $cyclePath
+                            )
                         );
                         $fieldNodes = array_map(
                             static fn (InputObjectField $field): ?InputValueDefinitionNode => $field->astNode,
@@ -81,8 +82,7 @@ class InputObjectCircularRefs
                         );
 
                         $this->schemaValidationContext->reportError(
-                            'Cannot reference Input Object "' . $fieldType->name . '" within itself '
-                            . 'through a series of non-null fields: "' . implode('.', $fieldNames) . '".',
+                            "Cannot reference Input Object \"{$fieldType->name}\" within itself through a series of non-null fields: \"{$fieldNames}\".",
                             $fieldNodes
                         );
                     }

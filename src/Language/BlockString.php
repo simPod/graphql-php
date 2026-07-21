@@ -2,16 +2,11 @@
 
 namespace GraphQL\Language;
 
-use function array_slice;
-use function count;
 use GraphQL\Utils\Utils;
-use function implode;
-use function mb_strlen;
-use function mb_substr;
-use function preg_split;
-use function str_replace;
-use function strpos;
 
+/**
+ * @see \GraphQL\Tests\Language\BlockStringTest
+ */
 class BlockString
 {
     /**
@@ -20,11 +15,9 @@ class BlockString
      *
      * This implements the GraphQL spec's BlockStringValue() static algorithm.
      */
-    public static function dedentValue(string $rawString): string
+    public static function dedentBlockStringLines(string $rawString): string
     {
-        // Expand a block string's raw value into independent lines.
-        $lines = preg_split('/\\r\\n|[\\n\\r]/', $rawString);
-        assert(is_array($lines), 'given the regex is valid');
+        $lines = Utils::splitLines($rawString);
 
         // Remove common indentation from all lines but first.
         $commonIndent = self::getIndentation($rawString);
@@ -77,8 +70,8 @@ class BlockString
                     if (Utils::charCodeAt($value, $i + 1) === 10) {
                         ++$i; // skip \r\n as one symbol
                     }
-                // falls through
-                // no break
+                    // falls through
+                    // no break
                 case 10: //  \n
                     $isFirstLine = false;
                     $isEmptyLine = true;
@@ -109,40 +102,54 @@ class BlockString
      * trailing blank line. However, if a block string starts with whitespace and is
      * a single-line, adding a leading blank line would strip that whitespace.
      */
-    public static function print(
-        string $value,
-        string $indentation = '',
-        bool $preferMultipleLines = false
-    ): string {
-        $valueLength = mb_strlen($value);
-        $isSingleLine = strpos($value, "\n") === false;
-        $hasLeadingSpace = $value !== '' && ($value[0] === ' ' || $value[0] === '\t');
-        $hasTrailingQuote = $value !== '' && $value[$valueLength - 1] === '"';
-        $hasTrailingSlash = $value !== '' && $value[$valueLength - 1] === '\\';
-        $printAsMultipleLines
-            = ! $isSingleLine
-            || $hasTrailingQuote
-            || $hasTrailingSlash
-            || $preferMultipleLines;
+    public static function print(string $value): string
+    {
+        $escapedValue = str_replace('"""', '\\"""', $value);
 
-        $result = '';
-        // Format a multi-line block quote to account for leading space.
-        if (
-            $printAsMultipleLines
-            && ! ($isSingleLine && $hasLeadingSpace)
-        ) {
-            $result .= "\n" . $indentation;
+        // Expand a block string's raw value into independent lines.
+        $lines = Utils::splitLines($escapedValue);
+        $isSingleLine = count($lines) === 1;
+
+        // If common indentation is found we can fix some of those cases by adding leading new line
+        $forceLeadingNewLine = count($lines) > 1;
+        foreach ($lines as $i => $line) {
+            if ($i === 0) {
+                continue;
+            }
+
+            if ($line !== '' && preg_match('/^\s/', $line) !== 1) {
+                $forceLeadingNewLine = false;
+            }
         }
 
-        $result .= $indentation !== ''
-            ? str_replace("\n", "\n" . $indentation, $value)
-            : $value;
+        // Trailing triple quotes just looks confusing but doesn't force trailing new line
+        $hasTrailingTripleQuotes = preg_match('/\\\\"""$/', $escapedValue) === 1;
+
+        // Trailing quote (single or double) or slash forces trailing new line
+        $hasTrailingQuote = preg_match('/"$/', $value) === 1 && ! $hasTrailingTripleQuotes;
+        $hasTrailingSlash = preg_match('/\\\\$/', $value) === 1;
+        $forceTrailingNewline = $hasTrailingQuote || $hasTrailingSlash;
+
+        // add leading and trailing new lines only if it improves readability
+        $printAsMultipleLines = ! $isSingleLine
+            || mb_strlen($value) > 70
+            || $forceTrailingNewline
+            || $forceLeadingNewLine
+            || $hasTrailingTripleQuotes;
+
+        $result = '';
+
+        // Format a multi-line block quote to account for leading space.
+        $skipLeadingNewLine = $isSingleLine && preg_match('/^\s/', $value) === 1;
+        if (($printAsMultipleLines && ! $skipLeadingNewLine) || $forceLeadingNewLine) {
+            $result .= "\n";
+        }
+
+        $result .= $escapedValue;
         if ($printAsMultipleLines) {
             $result .= "\n";
         }
 
-        return '"""'
-            . str_replace('"""', '\\"""', $result)
-            . '"""';
+        return '"""' . $result . '"""';
     }
 }

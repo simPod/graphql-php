@@ -2,20 +2,18 @@
 
 namespace GraphQL\Tests\Server;
 
-use const E_USER_DEPRECATED;
-use const E_USER_NOTICE;
-use const E_USER_WARNING;
 use GraphQL\Deferred;
+use GraphQL\Error\InvariantViolation;
 use GraphQL\Error\UserError;
 use GraphQL\Type\Definition\ObjectType;
 use GraphQL\Type\Definition\ResolveInfo;
 use GraphQL\Type\Definition\Type;
 use GraphQL\Type\Schema;
 use PHPUnit\Framework\TestCase;
-use function trigger_error;
 
 abstract class ServerTestCase extends TestCase
 {
+    /** @throws InvariantViolation */
     protected function buildSchema(): Schema
     {
         return new Schema([
@@ -29,9 +27,9 @@ abstract class ServerTestCase extends TestCase
                     'fieldWithPhpError' => [
                         'type' => Type::string(),
                         'resolve' => static function ($rootValue, array $args, $context, ResolveInfo $info): string {
-                            trigger_error('deprecated', E_USER_DEPRECATED);
-                            trigger_error('notice', E_USER_NOTICE);
-                            trigger_error('warning', E_USER_WARNING);
+                            trigger_error('deprecated', \E_USER_DEPRECATED);
+                            trigger_error('notice', \E_USER_NOTICE);
+                            trigger_error('warning', \E_USER_WARNING);
 
                             return $info->fieldName;
                         },

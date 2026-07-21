@@ -2,64 +2,53 @@
 
 namespace GraphQL\Utils;
 
-use function array_key_exists;
-use function array_keys;
-use function array_map;
-use function array_merge;
+use GraphQL\Error\ClientAware;
+use GraphQL\Error\CoercionError;
 use GraphQL\Error\Error;
-use GraphQL\Language\AST\VariableDefinitionNode;
+use GraphQL\Error\InvariantViolation;
 use GraphQL\Type\Definition\EnumType;
-use GraphQL\Type\Definition\EnumValueDefinition;
 use GraphQL\Type\Definition\InputObjectType;
 use GraphQL\Type\Definition\InputType;
 use GraphQL\Type\Definition\ListOfType;
 use GraphQL\Type\Definition\NonNull;
 use GraphQL\Type\Definition\ScalarType;
 use GraphQL\Type\Definition\Type;
-use function is_array;
-use function is_string;
-use stdClass;
-use Throwable;
-use Traversable;
+use GraphQL\Type\Schema;
 
 /**
- * Coerces a PHP value given a GraphQL Type.
- *
- * Returns either a value which is valid for the provided type or a list of
- * encountered coercion errors.
- *
  * @phpstan-type CoercedValue array{errors: null, value: mixed}
- * @phpstan-type CoercedErrors array{errors: array<int, Error>, value: null}
+ * @phpstan-type CoercedErrors array{errors: array<int, CoercionError>, value: null}
  *
- * The key prev should actually also be typed as Path, but PHPStan does not support recursive types.
- * @phpstan-type Path array{prev: array<string, mixed>|null, key: string|int}
+ * @phpstan-import-type InputPath from CoercionError
  */
 class Value
 {
     /**
-     * Given a type and any value, return a runtime value coerced to match the type.
+     * Coerce the given value to match the given GraphQL Input Type.
+     *
+     * Returns either a value which is valid for the provided type,
+     * or a list of encountered coercion errors.
      *
      * @param mixed $value
      * @param InputType&Type $type
-     * @phpstan-param Path|null $path
+     *
+     * @phpstan-param InputPath|null $path
+     *
+     * @throws InvariantViolation
      *
      * @phpstan-return CoercedValue|CoercedErrors
      */
-    public static function coerceValue($value, InputType $type, ?VariableDefinitionNode $blameNode = null, ?array $path = null): array
+    public static function coerceInputValue($value, InputType $type, ?array $path = null, ?Schema $schema = null): array
     {
         if ($type instanceof NonNull) {
             if ($value === null) {
                 return self::ofErrors([
-                    self::coercionError(
-                        "Expected non-nullable type {$type} not to be null",
-                        $blameNode,
-                        $path
-                    ),
+                    CoercionError::make("Expected non-nullable type \"{$type}\" not to be null.", $path, $value),
                 ]);
             }
 
             // @phpstan-ignore-next-line wrapped type is known to be input type after schema validation
-            return self::coerceValue($value, $type->getWrappedType(), $blameNode, $path);
+            return self::coerceInputValue($value, $type->getWrappedType(), $path, $schema);
         }
 
         if ($value === null) {
@@ -67,49 +56,30 @@ class Value
             return self::ofValue(null);
         }
 
-        if ($type instanceof ScalarType) {
-            // Scalars determine if a value is valid via parseValue(), which can
-            // throw to indicate failure. If it throws, maintain a reference to
-            // the original error.
-            try {
-                return self::ofValue($type->parseValue($value));
-            } catch (Throwable $error) {
-                return self::ofErrors([
-                    self::coercionError(
-                        "Expected type {$type->name}",
-                        $blameNode,
-                        $path,
-                        $error->getMessage(),
-                        $error
-                    ),
-                ]);
-            }
+        // Account for type loader returning a different scalar instance than
+        // the built-in singleton used in field definitions. Resolve the actual
+        // type from the schema to ensure the correct parseValue() is called.
+        if ($schema !== null && Type::isBuiltInScalar($type)) {
+            $schemaType = $schema->getType($type->name);
+            assert($schemaType instanceof ScalarType, "Schema must provide a ScalarType for built-in scalar \"{$type->name}\".");
+            $type = $schemaType;
         }
 
-        if ($type instanceof EnumType) {
+        if ($type instanceof ScalarType || $type instanceof EnumType) {
             try {
                 return self::ofValue($type->parseValue($value));
-            } catch (Throwable $error) {
-                $suggestions = Utils::suggestionList(
-                    Utils::printSafe($value),
-                    array_map(
-                        static fn (EnumValueDefinition $enumValue): string => $enumValue->name,
-                        $type->getValues()
-                    )
-                );
-
-                $didYouMean = $suggestions === []
-                    ? null
-                    : 'did you mean ' . Utils::orList($suggestions) . '?';
+            } catch (\Throwable $error) {
+                if (
+                    $error instanceof Error
+                    || ($error instanceof ClientAware && $error->isClientSafe())
+                ) {
+                    return self::ofErrors([
+                        CoercionError::make($error->getMessage(), $path, $value, $error),
+                    ]);
+                }
 
                 return self::ofErrors([
-                    self::coercionError(
-                        "Expected type {$type->name}",
-                        $blameNode,
-                        $path,
-                        $didYouMean,
-                        $error
-                    ),
+                    CoercionError::make("Expected type \"{$type->name}\".", $path, $value, $error),
                 ]);
             }
         }
@@ -118,15 +88,15 @@ class Value
             $itemType = $type->getWrappedType();
             assert($itemType instanceof InputType, 'known through schema validation');
 
-            if (is_array($value) || $value instanceof Traversable) {
+            if (is_iterable($value)) {
                 $errors = [];
                 $coercedValue = [];
                 foreach ($value as $index => $itemValue) {
-                    $coercedItem = self::coerceValue(
+                    $coercedItem = self::coerceInputValue(
                         $itemValue,
                         $itemType,
-                        $blameNode,
-                        self::atPath($path, $index)
+                        [...$path ?? [], $index],
+                        $schema,
                     );
 
                     if (isset($coercedItem['errors'])) {
@@ -142,7 +112,7 @@ class Value
             }
 
             // Lists accept a non-list value as a list of one.
-            $coercedItem = self::coerceValue($value, $itemType, $blameNode);
+            $coercedItem = self::coerceInputValue($value, $itemType, null, $schema);
 
             return isset($coercedItem['errors'])
                 ? $coercedItem
@@ -151,17 +121,13 @@ class Value
 
         assert($type instanceof InputObjectType, 'we handled all other cases at this point');
 
-        if ($value instanceof stdClass) {
+        if ($value instanceof \stdClass) {
             // Cast objects to associative array before checking the fields.
             // Note that the coerced value will be an array.
             $value = (array) $value;
         } elseif (! is_array($value)) {
             return self::ofErrors([
-                self::coercionError(
-                    "Expected type {$type->name} to be an object",
-                    $blameNode,
-                    $path
-                ),
+                CoercionError::make("Expected type \"{$type->name}\" to be an object.", $path, $value),
             ]);
         }
 
@@ -171,11 +137,11 @@ class Value
         foreach ($fields as $fieldName => $field) {
             if (array_key_exists($fieldName, $value)) {
                 $fieldValue = $value[$fieldName];
-                $coercedField = self::coerceValue(
+                $coercedField = self::coerceInputValue(
                     $fieldValue,
                     $field->getType(),
-                    $blameNode,
-                    self::atPath($path, $fieldName)
+                    [...$path ?? [], $fieldName],
+                    $schema,
                 );
 
                 if (isset($coercedField['errors'])) {
@@ -186,13 +152,9 @@ class Value
             } elseif ($field->defaultValueExists()) {
                 $coercedValue[$fieldName] = $field->defaultValue;
             } elseif ($field->getType() instanceof NonNull) {
-                $fieldPath = self::printPath(self::atPath($path, $fieldName));
                 $errors = self::add(
                     $errors,
-                    self::coercionError(
-                        "Field {$fieldPath} of required type {$field->getType()->toString()} was not provided",
-                        $blameNode
-                    )
+                    CoercionError::make("Field \"{$fieldName}\" of required type \"{$field->getType()->toString()}\" was not provided.", $path, $value)
                 );
             }
         }
@@ -207,87 +169,56 @@ class Value
                 (string) $fieldName,
                 array_keys($fields)
             );
-            $didYouMean = $suggestions === []
-                ? null
-                : 'did you mean ' . Utils::orList($suggestions) . '?';
+            $message = "Field \"{$fieldName}\" is not defined by type \"{$type->name}\"."
+                . ($suggestions === []
+                    ? ''
+                    : ' Did you mean ' . Utils::quotedOrList($suggestions) . '?');
+
             $errors = self::add(
                 $errors,
-                self::coercionError(
-                    "Field \"{$fieldName}\" is not defined by type {$type->name}",
-                    $blameNode,
-                    $path,
-                    $didYouMean
-                )
+                CoercionError::make($message, $path, $value)
             );
         }
 
+        // Validate OneOf constraints if this is a OneOf input type
+        if ($type->isOneOf()) {
+            $providedFieldCount = count($coercedValue);
+            $nullFieldName = null;
+
+            if ($providedFieldCount !== 1) {
+                $errors = self::add(
+                    $errors,
+                    CoercionError::make("OneOf input object \"{$type->name}\" must specify exactly one field.", $path, $value)
+                );
+            } else {
+                foreach ($coercedValue as $fieldName => $fieldValue) {
+                    if ($fieldValue === null) {
+                        $nullFieldName = $fieldName;
+                    }
+                }
+
+                if ($nullFieldName !== null) {
+                    $errors = self::add(
+                        $errors,
+                        CoercionError::make("OneOf input object \"{$type->name}\" field \"{$nullFieldName}\" must be non-null.", $path, $value)
+                    );
+                }
+            }
+        }
+
         return $errors === []
-            ? self::ofValue($coercedValue)
+            ? self::ofValue($type->parseValue($coercedValue))
             : self::ofErrors($errors);
     }
 
     /**
-     * @param array<int, Error> $errors
+     * @param array<int, CoercionError> $errors
      *
      * @phpstan-return CoercedErrors
      */
     private static function ofErrors(array $errors): array
     {
         return ['errors' => $errors, 'value' => null];
-    }
-
-    /**
-     * @phpstan-param Path|null $path
-     */
-    private static function coercionError(
-        string $message,
-        ?VariableDefinitionNode $blameNode,
-        ?array $path = null,
-        ?string $subMessage = null,
-        ?Throwable $originalError = null
-    ): Error {
-        $pathStr = self::printPath($path);
-
-        $fullMessage = $message
-            . ($pathStr === ''
-                ? ''
-                : ' at ' . $pathStr)
-            . ($subMessage === null || $subMessage === ''
-                ? '.'
-                : '; ' . $subMessage);
-
-        return new Error(
-            $fullMessage,
-            $blameNode,
-            null,
-            [],
-            null,
-            $originalError
-        );
-    }
-
-    /**
-     * Build a string describing the path into the value where the error was found.
-     *
-     * @phpstan-param Path|null $path
-     */
-    private static function printPath(?array $path = null): string
-    {
-        if ($path === null) {
-            return '';
-        }
-
-        $pathStr = '';
-        do {
-            $key = $path['key'];
-            $pathStr = (is_string($key)
-                    ? ".{$key}"
-                    : "[{$key}]")
-                . $pathStr;
-            $path = $path['prev'];
-        } while ($path !== null);
-
-        return "value{$pathStr}";
     }
 
     /**
@@ -301,21 +232,10 @@ class Value
     }
 
     /**
-     * @param string|int $key
-     * @phpstan-param Path|null $prev
+     * @param array<int, CoercionError> $errors
+     * @param CoercionError|array<int, CoercionError> $errorOrErrors
      *
-     * @return Path
-     */
-    private static function atPath(?array $prev, $key): array
-    {
-        return ['prev' => $prev, 'key' => $key];
-    }
-
-    /**
-     * @param array<int, Error>       $errors
-     * @param Error|array<int, Error> $errorOrErrors
-     *
-     * @return array<int, Error>
+     * @return array<int, CoercionError>
      */
     private static function add(array $errors, $errorOrErrors): array
     {

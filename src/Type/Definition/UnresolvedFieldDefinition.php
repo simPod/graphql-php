@@ -4,6 +4,7 @@ namespace GraphQL\Type\Definition;
 
 /**
  * @phpstan-import-type UnnamedFieldDefinitionConfig from FieldDefinition
+ *
  * @phpstan-type DefinitionResolver callable(): (FieldDefinition|(Type&OutputType)|UnnamedFieldDefinitionConfig)
  */
 class UnresolvedFieldDefinition
@@ -12,13 +13,12 @@ class UnresolvedFieldDefinition
 
     /**
      * @var callable
+     *
      * @phpstan-var DefinitionResolver
      */
     private $definitionResolver;
 
-    /**
-     * @param DefinitionResolver $definitionResolver
-     */
+    /** @param DefinitionResolver $definitionResolver */
     public function __construct(string $name, callable $definitionResolver)
     {
         $this->name = $name;

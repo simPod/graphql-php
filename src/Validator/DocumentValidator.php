@@ -2,8 +2,6 @@
 
 namespace GraphQL\Validator;
 
-use function array_merge;
-use function count;
 use GraphQL\Error\Error;
 use GraphQL\Language\AST\DocumentNode;
 use GraphQL\Language\Visitor;
@@ -24,6 +22,7 @@ use GraphQL\Validator\Rules\NoFragmentCycles;
 use GraphQL\Validator\Rules\NoUndefinedVariables;
 use GraphQL\Validator\Rules\NoUnusedFragments;
 use GraphQL\Validator\Rules\NoUnusedVariables;
+use GraphQL\Validator\Rules\OneOfInputObjectsRule;
 use GraphQL\Validator\Rules\OverlappingFieldsCanBeMerged;
 use GraphQL\Validator\Rules\PossibleFragmentSpreads;
 use GraphQL\Validator\Rules\PossibleTypeExtensions;
@@ -34,10 +33,12 @@ use GraphQL\Validator\Rules\QueryDepth;
 use GraphQL\Validator\Rules\QuerySecurityRule;
 use GraphQL\Validator\Rules\ScalarLeafs;
 use GraphQL\Validator\Rules\SingleFieldSubscription;
+use GraphQL\Validator\Rules\UniqueArgumentDefinitionNames;
 use GraphQL\Validator\Rules\UniqueArgumentNames;
 use GraphQL\Validator\Rules\UniqueDirectiveNames;
 use GraphQL\Validator\Rules\UniqueDirectivesPerLocation;
 use GraphQL\Validator\Rules\UniqueEnumValueNames;
+use GraphQL\Validator\Rules\UniqueFieldDefinitionNames;
 use GraphQL\Validator\Rules\UniqueFragmentNames;
 use GraphQL\Validator\Rules\UniqueInputFieldNames;
 use GraphQL\Validator\Rules\UniqueOperationNames;
@@ -48,7 +49,6 @@ use GraphQL\Validator\Rules\ValidationRule;
 use GraphQL\Validator\Rules\ValuesOfCorrectType;
 use GraphQL\Validator\Rules\VariablesAreInputTypes;
 use GraphQL\Validator\Rules\VariablesInAllowedPosition;
-use function implode;
 
 /**
  * Implements the "Validation" section of the spec.
@@ -87,9 +87,11 @@ class DocumentValidator
     /**
      * Validate a GraphQL query against a schema.
      *
-     * @param array<ValidationRule>|null $rules
+     * @param array<ValidationRule>|null $rules Defaults to using all available rules
      *
-     * @return array<int, Error>
+     * @throws \Exception
+     *
+     * @return list<Error>
      *
      * @api
      */
@@ -101,7 +103,7 @@ class DocumentValidator
     ): array {
         $rules ??= static::allRules();
 
-        if (count($rules) === 0) {
+        if ($rules === []) {
             return [];
         }
 
@@ -128,6 +130,8 @@ class DocumentValidator
     /**
      * Returns all global validation rules.
      *
+     * @throws \InvalidArgumentException
+     *
      * @return array<string, ValidationRule>
      *
      * @api
@@ -146,9 +150,7 @@ class DocumentValidator
         return self::$rules;
     }
 
-    /**
-     * @return array<class-string<ValidationRule>, ValidationRule>
-     */
+    /** @return array<class-string<ValidationRule>, ValidationRule> */
     public static function defaultRules(): array
     {
         return self::$defaultRules ??= [
@@ -178,42 +180,43 @@ class DocumentValidator
             VariablesInAllowedPosition::class => new VariablesInAllowedPosition(),
             OverlappingFieldsCanBeMerged::class => new OverlappingFieldsCanBeMerged(),
             UniqueInputFieldNames::class => new UniqueInputFieldNames(),
+            OneOfInputObjectsRule::class => new OneOfInputObjectsRule(),
         ];
     }
 
     /**
+     * @deprecated just add rules via @see DocumentValidator::addRule()
+     *
+     * @throws \InvalidArgumentException
+     *
      * @return array<class-string<QuerySecurityRule>, QuerySecurityRule>
      */
     public static function securityRules(): array
     {
-        // This way of defining rules is deprecated
-        // When custom security rule is required - it should be just added via DocumentValidator::addRule();
-        // TODO: deprecate this
-
         return self::$securityRules ??= [
-            DisableIntrospection::class => new DisableIntrospection(DisableIntrospection::DISABLED), // DEFAULT DISABLED
-            QueryDepth::class => new QueryDepth(QueryDepth::DISABLED), // default disabled
-            QueryComplexity::class => new QueryComplexity(QueryComplexity::DISABLED), // default disabled
+            DisableIntrospection::class => new DisableIntrospection(DisableIntrospection::DISABLED),
+            QueryDepth::class => new QueryDepth(QueryDepth::DISABLED),
+            QueryComplexity::class => new QueryComplexity(QueryComplexity::DISABLED),
         ];
     }
 
-    /**
-     * @return array<class-string<ValidationRule>, ValidationRule>
-     */
+    /** @return array<class-string<ValidationRule>, ValidationRule> */
     public static function sdlRules(): array
     {
         return self::$sdlRules ??= [
             LoneSchemaDefinition::class => new LoneSchemaDefinition(),
             UniqueOperationTypes::class => new UniqueOperationTypes(),
             UniqueTypeNames::class => new UniqueTypeNames(),
+            UniqueEnumValueNames::class => new UniqueEnumValueNames(),
+            UniqueFieldDefinitionNames::class => new UniqueFieldDefinitionNames(),
+            UniqueArgumentDefinitionNames::class => new UniqueArgumentDefinitionNames(),
             UniqueDirectiveNames::class => new UniqueDirectiveNames(),
             KnownTypeNames::class => new KnownTypeNames(),
             KnownDirectives::class => new KnownDirectives(),
-            KnownArgumentNamesOnDirectives::class => new KnownArgumentNamesOnDirectives(),
             UniqueDirectivesPerLocation::class => new UniqueDirectivesPerLocation(),
             PossibleTypeExtensions::class => new PossibleTypeExtensions(),
+            KnownArgumentNamesOnDirectives::class => new KnownArgumentNamesOnDirectives(),
             UniqueArgumentNames::class => new UniqueArgumentNames(),
-            UniqueEnumValueNames::class => new UniqueEnumValueNames(),
             UniqueInputFieldNames::class => new UniqueInputFieldNames(),
             ProvidedRequiredArgumentsOnDirectives::class => new ProvidedRequiredArgumentsOnDirectives(),
         ];
@@ -227,6 +230,8 @@ class DocumentValidator
      * @example DocumentValidator::getRule(GraphQL\Validator\Rules\QueryComplexity::class);
      *
      * @api
+     *
+     * @throws \InvalidArgumentException
      */
     public static function getRule(string $name): ?ValidationRule
     {
@@ -258,7 +263,9 @@ class DocumentValidator
      *
      * @param array<ValidationRule>|null $rules
      *
-     * @return array<int, Error>
+     * @throws \Exception
+     *
+     * @return list<Error>
      */
     public static function validateSDL(
         DocumentNode $documentAST,
@@ -267,7 +274,7 @@ class DocumentValidator
     ): array {
         $rules ??= self::sdlRules();
 
-        if (count($rules) === 0) {
+        if ($rules === []) {
             return [];
         }
 
@@ -286,25 +293,31 @@ class DocumentValidator
         return $context->getErrors();
     }
 
+    /**
+     * @throws \Exception
+     * @throws Error
+     */
     public static function assertValidSDL(DocumentNode $documentAST): void
     {
         $errors = self::validateSDL($documentAST);
-        if (count($errors) > 0) {
-            throw new Error(self::combineErrorMessages($errors));
-        }
-    }
-
-    public static function assertValidSDLExtension(DocumentNode $documentAST, Schema $schema): void
-    {
-        $errors = self::validateSDL($documentAST, $schema);
-        if (count($errors) > 0) {
+        if ($errors !== []) {
             throw new Error(self::combineErrorMessages($errors));
         }
     }
 
     /**
-     * @param array<Error> $errors
+     * @throws \Exception
+     * @throws Error
      */
+    public static function assertValidSDLExtension(DocumentNode $documentAST, Schema $schema): void
+    {
+        $errors = self::validateSDL($documentAST, $schema);
+        if ($errors !== []) {
+            throw new Error(self::combineErrorMessages($errors));
+        }
+    }
+
+    /** @param array<Error> $errors */
     private static function combineErrorMessages(array $errors): string
     {
         $messages = [];

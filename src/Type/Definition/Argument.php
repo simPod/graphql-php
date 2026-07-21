@@ -2,12 +2,10 @@
 
 namespace GraphQL\Type\Definition;
 
-use function array_key_exists;
 use GraphQL\Error\InvariantViolation;
 use GraphQL\Language\AST\InputValueDefinitionNode;
 use GraphQL\Type\Schema;
 use GraphQL\Utils\Utils;
-use function is_array;
 
 /**
  * @phpstan-type ArgumentType (Type&InputType)|callable(): (Type&InputType)
@@ -16,6 +14,7 @@ use function is_array;
  *     type: ArgumentType,
  *     defaultValue?: mixed,
  *     description?: string|null,
+ *     deprecationReason?: string|null,
  *     astNode?: InputValueDefinitionNode|null
  * }
  * @phpstan-type ArgumentConfig array{
@@ -23,6 +22,7 @@ use function is_array;
  *     type: ArgumentType,
  *     defaultValue?: mixed,
  *     description?: string|null,
+ *     deprecationReason?: string|null,
  *     astNode?: InputValueDefinitionNode|null
  * }
  * @phpstan-type ArgumentListConfig iterable<ArgumentConfig|ArgumentType>|iterable<UnnamedArgumentConfig>
@@ -36,6 +36,8 @@ class Argument
 
     public ?string $description;
 
+    public ?string $deprecationReason;
+
     /** @var Type&InputType */
     private Type $type;
 
@@ -44,14 +46,13 @@ class Argument
     /** @phpstan-var ArgumentConfig */
     public array $config;
 
-    /**
-     * @phpstan-param ArgumentConfig $config
-     */
+    /** @phpstan-param ArgumentConfig $config */
     public function __construct(array $config)
     {
         $this->name = $config['name'];
         $this->defaultValue = $config['defaultValue'] ?? null;
         $this->description = $config['description'] ?? null;
+        $this->deprecationReason = $config['deprecationReason'] ?? null;
         // Do nothing for type, it is lazy loaded in getType()
         $this->astNode = $config['astNode'] ?? null;
 
@@ -72,19 +73,19 @@ class Argument
                 $argConfig = ['type' => $argConfig];
             }
 
-            $list[] = new self($argConfig + ['name' => $name]);
+            /** @phpstan-var ArgumentConfig $argConfigWithName */
+            $argConfigWithName = $argConfig + ['name' => $name];
+
+            $list[] = new self($argConfigWithName);
         }
 
         return $list;
     }
 
-    /**
-     * @return Type&InputType
-     */
+    /** @return Type&InputType */
     public function getType(): Type
     {
         if (! isset($this->type)) {
-            // @phpstan-ignore-next-line schema validation will catch a Type that is not an InputType
             $this->type = Schema::resolveType($this->config['type']);
         }
 
@@ -100,6 +101,11 @@ class Argument
     {
         return $this->getType() instanceof NonNull
             && ! $this->defaultValueExists();
+    }
+
+    public function isDeprecated(): bool
+    {
+        return (bool) $this->deprecationReason;
     }
 
     /**
@@ -118,8 +124,11 @@ class Argument
 
         if (! $type instanceof InputType) {
             $notInputType = Utils::printSafe($this->type);
-
             throw new InvariantViolation("{$parentType->name}.{$parentField->name}({$this->name}): argument type must be Input Type but got: {$notInputType}");
+        }
+
+        if ($this->isRequired() && $this->isDeprecated()) {
+            throw new InvariantViolation("Required argument {$parentType->name}.{$parentField->name}({$this->name}:) cannot be deprecated.");
         }
     }
 }

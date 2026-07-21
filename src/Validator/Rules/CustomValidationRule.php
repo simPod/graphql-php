@@ -17,13 +17,12 @@ class CustomValidationRule extends ValidationRule
 {
     /**
      * @var callable
+     *
      * @phpstan-var VisitorFn
      */
     protected $visitorFn;
 
-    /**
-     * @phpstan-param VisitorFn $visitorFn
-     */
+    /** @phpstan-param VisitorFn $visitorFn */
     public function __construct(string $name, callable $visitorFn)
     {
         $this->name = $name;

@@ -2,40 +2,45 @@
 
 namespace GraphQL\Examples\Blog\Type\Field;
 
+use GraphQL\Error\InvariantViolation;
 use GraphQL\Examples\Blog\Type\Enum\ContentFormatType;
-use GraphQL\Examples\Blog\Types;
-use function mb_substr;
-use function nl2br;
-use function strip_tags;
+use GraphQL\Examples\Blog\TypeRegistry;
+use GraphQL\Type\Definition\Type;
 
 class HtmlField
 {
     /**
-     * @return array<string, mixed>
+     * @param array{
+     * 	resolve: callable
+     * } $config
+     *
+     * @throws InvariantViolation
+     *
+     * @return array<mixed>
      */
-    public static function build(string $objectKey): array
+    public static function build(array $config): array
     {
+        $resolver = $config['resolve'];
+
         // Demonstrates how to organize re-usable fields
         // Usual example: when the same field with same args shows up in different types
         // (for example when it is a part of some interface)
         return [
-            'type' => Types::string(),
+            'type' => Type::string(),
             'args' => [
                 'format' => [
-                    'type' => Types::contentFormat(),
+                    'type' => TypeRegistry::type(ContentFormatType::class),
                     'defaultValue' => ContentFormatType::FORMAT_HTML,
                 ],
-                'maxLength' => Types::int(),
+                'maxLength' => Type::int(),
             ],
-            'resolve' => static function ($object, $args) use ($objectKey) {
-                $html = $object->{$objectKey};
+            'resolve' => static function ($rootValue, array $args) use ($resolver): ?string {
+                $html = $resolver($rootValue, $args);
                 $text = strip_tags($html);
 
-                if (isset($args['maxLength'])) {
-                    $safeText = mb_substr($text, 0, $args['maxLength']);
-                } else {
-                    $safeText = $text;
-                }
+                $safeText = isset($args['maxLength'])
+                    ? mb_substr($text, 0, $args['maxLength'])
+                    : $text;
 
                 switch ($args['format']) {
                     case ContentFormatType::FORMAT_HTML:
@@ -44,7 +49,7 @@ class HtmlField
                             return nl2br($safeText);
                         }
 
-                            return $html;
+                        return $html;
 
                     case ContentFormatType::FORMAT_TEXT:
                     default:

@@ -2,37 +2,31 @@
 
 namespace GraphQL\Tests\Language;
 
-use function array_keys;
-use function count;
-use function get_class;
-use function get_object_vars;
 use GraphQL\Language\AST\Location;
 use GraphQL\Language\AST\Node;
 use GraphQL\Language\AST\NodeList;
 use GraphQL\Language\Parser;
 use GraphQL\Utils\AST;
-use function implode;
-use function json_decode;
 use PHPUnit\Framework\TestCase;
+
 use function Safe\file_get_contents;
 
-class SerializationTest extends TestCase
+final class SerializationTest extends TestCase
 {
     public function testSerializesAst(): void
     {
         $kitchenSink = file_get_contents(__DIR__ . '/kitchen-sink.graphql');
-        $ast = Parser::parse($kitchenSink);
+        $parsedAst = Parser::parse($kitchenSink);
         $expectedAst = json_decode(file_get_contents(__DIR__ . '/kitchen-sink.ast'), true);
-        self::assertEquals($expectedAst, AST::toArray($ast));
+        self::assertEquals($expectedAst, AST::toArray($parsedAst));
     }
 
     public function testUnserializesAst(): void
     {
         $kitchenSink = file_get_contents(__DIR__ . '/kitchen-sink.graphql');
-        $serializedAst = json_decode(file_get_contents(__DIR__ . '/kitchen-sink.ast'), true);
-        $actualAst = AST::fromArray($serializedAst);
         $parsedAst = Parser::parse($kitchenSink);
-        self::assertNodesAreEqual($parsedAst, $actualAst);
+        $serializedAst = json_decode(file_get_contents(__DIR__ . '/kitchen-sink.ast'), true);
+        self::assertNodesAreEqual($parsedAst, AST::fromArray($serializedAst));
     }
 
     /**
@@ -44,7 +38,7 @@ class SerializationTest extends TestCase
     {
         $err = 'Mismatch at AST path: ' . implode(', ', $path);
 
-        self::assertSame(get_class($expected), get_class($actual), $err);
+        self::assertInstanceOf(get_class($expected), $actual, $err);
 
         $expectedVars = get_object_vars($expected);
         $actualVars = get_object_vars($actual);
@@ -60,7 +54,7 @@ class SerializationTest extends TestCase
                 self::assertNodesAreEqual($expectedValue, $actualValue, $tmpPath);
             } elseif ($expectedValue instanceof NodeList) {
                 self::assertInstanceOf(NodeList::class, $actualValue, $err);
-                self::assertEquals(count($expectedValue), count($actualValue), $err);
+                self::assertCount(count($expectedValue), $actualValue, $err);
 
                 foreach ($expectedValue as $index => $listNode) {
                     $tmpPath2 = $tmpPath;
@@ -80,17 +74,16 @@ class SerializationTest extends TestCase
     public function testSerializeSupportsNoLocationOption(): void
     {
         $kitchenSink = file_get_contents(__DIR__ . '/kitchen-sink.graphql');
-        $ast = Parser::parse($kitchenSink, ['noLocation' => true]);
+        $parsedAst = Parser::parse($kitchenSink, ['noLocation' => true]);
         $expectedAst = json_decode(file_get_contents(__DIR__ . '/kitchen-sink-noloc.ast'), true);
-        self::assertEquals($expectedAst, $ast->toArray());
+        self::assertEquals($expectedAst, $parsedAst->toArray());
     }
 
     public function testUnserializeSupportsNoLocationOption(): void
     {
         $kitchenSink = file_get_contents(__DIR__ . '/kitchen-sink.graphql');
-        $serializedAst = json_decode(file_get_contents(__DIR__ . '/kitchen-sink-noloc.ast'), true);
-        $actualAst = AST::fromArray($serializedAst);
         $parsedAst = Parser::parse($kitchenSink, ['noLocation' => true]);
-        self::assertNodesAreEqual($parsedAst, $actualAst);
+        $serializedAst = json_decode(file_get_contents(__DIR__ . '/kitchen-sink-noloc.ast'), true);
+        self::assertNodesAreEqual($parsedAst, AST::fromArray($serializedAst));
     }
 }

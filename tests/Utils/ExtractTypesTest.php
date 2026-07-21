@@ -11,7 +11,7 @@ use GraphQL\Type\Definition\UnionType;
 use GraphQL\Utils\TypeInfo;
 use PHPUnit\Framework\TestCase;
 
-class ExtractTypesTest extends TestCase
+final class ExtractTypesTest extends TestCase
 {
     /** @var ObjectType */
     private $query;
@@ -52,7 +52,7 @@ class ExtractTypesTest extends TestCase
     /** @var InputObjectType */
     private $postCommentMutationInput;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         $this->node = new InterfaceType([
             'name' => 'Node',

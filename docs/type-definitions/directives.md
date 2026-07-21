@@ -1,12 +1,16 @@
 ## Built-in directives
+
 The directive is a way for a client to give GraphQL server additional context and hints on how to execute
-the query. The directive can be attached to a field or fragment and can affect the execution of the 
+the query. The directive can be attached to a field or fragment and can affect the execution of the
 query in any way the server desires.
 
-GraphQL specification includes two built-in directives:
- 
-* **@include(if: Boolean)** Only include this field or fragment in the result if the argument is **true** 
-* **@skip(if: Boolean)** Skip this field or fragment if the argument is **true**
+The GraphQL specification includes the following built-in directives:
+
+- **@include(if: Boolean)** Only include this field or fragment in the result if the argument is **true**
+- **@skip(if: Boolean)** Skip this field or fragment if the argument is **true**
+- **@deprecated(reason: String)** Marks a field, argument, input field, or enum value as deprecated with an optional reason
+- **@specifiedBy(url: String!)** Links a custom scalar type to a human-readable specification URL
+- **@oneOf** Marks an input object type as a "oneof" input, requiring exactly one field to be non-null
 
 For example:
 
@@ -21,16 +25,16 @@ query Hero($episode: Episode, $withFriends: Boolean!) {
 }
 ```
 
-Here if **$withFriends** variable is set to **false** - friends section will be ignored and excluded 
-from the response. Important implementation detail: those fields will never be executed 
+Here if **$withFriends** variable is set to **false** - friends section will be ignored and excluded
+from the response. Important implementation detail: those fields will never be executed
 (not just removed from response after execution).
 
 ## Custom directives
 
 **graphql-php** supports custom directives even though their presence does not affect the execution of fields.
-You can use [`GraphQL\Type\Definition\ResolveInfo`](../class-reference.md#graphqltypedefinitionresolveinfo) 
+You can use [`GraphQL\Type\Definition\ResolveInfo`](../class-reference.md#graphqltypedefinitionresolveinfo)
 in field resolvers to modify the output depending on those directives or perform statistics collection.
- 
+
 Other use case is your own query validation rules relying on custom directives.
 
 In **graphql-php** custom directive is an instance of `GraphQL\Type\Definition\Directive`
@@ -57,5 +61,5 @@ $trackDirective = new Directive([
 ]);
 ```
 
-See possible directive locations in 
+See possible directive locations in
 [`GraphQL\Language\DirectiveLocation`](../class-reference.md#graphqllanguagedirectivelocation).

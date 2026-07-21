@@ -12,7 +12,7 @@ use GraphQL\Type\Schema;
 /**
  * @see LazyTypeLoaderTest
  */
-final class EagerTypeLoaderTest extends TypeLoaderTest
+final class EagerTypeLoaderTest extends TypeLoaderTestCaseBase
 {
     private InterfaceType $node;
 
@@ -24,7 +24,7 @@ final class EagerTypeLoaderTest extends TypeLoaderTest
 
     private InputObjectType $postStoryMutationInput;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         parent::setUp();
 
@@ -154,13 +154,14 @@ final class EagerTypeLoaderTest extends TypeLoaderTest
             'mutation' => $this->mutation,
             'types' => [$this->blogStory],
         ]);
+        $schema->assertValid();
 
-        self::assertEquals([
-            'Query.fields',
-            'Content.fields',
+        self::assertSame([
             'Node.fields',
-            'Mutation.fields',
+            'Content.fields',
             'BlogStory.fields',
+            'Query.fields',
+            'Mutation.fields',
         ], $this->calls);
 
         self::assertSame($this->query, $schema->getType('Query'));
@@ -189,23 +190,23 @@ final class EagerTypeLoaderTest extends TypeLoaderTest
             'mutation' => $this->mutation,
             'typeLoader' => $this->typeLoader,
         ]);
-        self::assertEquals([], $this->calls);
+        self::assertSame([], $this->calls);
 
         $node = $schema->getType('Node');
         self::assertSame($this->node, $node);
-        self::assertEquals(['Node'], $this->calls);
+        self::assertSame(['Node'], $this->calls);
 
         $content = $schema->getType('Content');
         self::assertSame($this->content, $content);
-        self::assertEquals(['Node', 'Content'], $this->calls);
+        self::assertSame(['Node', 'Content'], $this->calls);
 
         $input = $schema->getType('PostStoryMutationInput');
         self::assertSame($this->postStoryMutationInput, $input);
-        self::assertEquals(['Node', 'Content', 'PostStoryMutationInput'], $this->calls);
+        self::assertSame(['Node', 'Content', 'PostStoryMutationInput'], $this->calls);
 
         $result = $schema->isSubType($this->node, $this->blogStory);
         self::assertTrue($result);
-        self::assertEquals(
+        self::assertSame(
             [
                 'Node',
                 'Content',

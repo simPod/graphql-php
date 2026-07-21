@@ -7,7 +7,6 @@ use GraphQL\Language\AST\BooleanValueNode;
 use GraphQL\Language\AST\Node;
 use GraphQL\Language\Printer;
 use GraphQL\Utils\Utils;
-use function is_bool;
 
 class BooleanType extends ScalarType
 {
@@ -26,16 +25,21 @@ class BooleanType extends ScalarType
         return (bool) $value;
     }
 
+    /** @throws Error */
     public function parseValue($value): bool
     {
         if (is_bool($value)) {
             return $value;
         }
 
-        $notBoolean = Utils::printSafe($value);
+        $notBoolean = Utils::printSafeJson($value);
         throw new Error("Boolean cannot represent a non boolean value: {$notBoolean}");
     }
 
+    /**
+     * @throws \JsonException
+     * @throws Error
+     */
     public function parseLiteral(Node $valueNode, ?array $variables = null): bool
     {
         if ($valueNode instanceof BooleanValueNode) {

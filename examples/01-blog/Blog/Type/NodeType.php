@@ -2,13 +2,13 @@
 
 namespace GraphQL\Examples\Blog\Type;
 
-use Exception;
 use GraphQL\Examples\Blog\Data\Image;
 use GraphQL\Examples\Blog\Data\Story;
 use GraphQL\Examples\Blog\Data\User;
-use GraphQL\Examples\Blog\Types;
+use GraphQL\Examples\Blog\TypeRegistry;
 use GraphQL\Type\Definition\InterfaceType;
 use GraphQL\Type\Definition\ObjectType;
+use GraphQL\Type\Definition\Type;
 use GraphQL\Utils\Utils;
 
 class NodeType extends InterfaceType
@@ -18,7 +18,7 @@ class NodeType extends InterfaceType
         parent::__construct([
             'name' => 'Node',
             'fields' => [
-                'id' => Types::id(),
+                'id' => Type::id(),
             ],
             'resolveType' => [$this, 'resolveNodeType'],
         ]);
@@ -27,22 +27,25 @@ class NodeType extends InterfaceType
     /**
      * @param mixed $object
      *
+     * @throws \Exception
+     *
      * @return callable(): ObjectType
      */
     public function resolveNodeType($object)
     {
         if ($object instanceof User) {
-            return Types::user();
+            return TypeRegistry::type(UserType::class);
         }
 
         if ($object instanceof Image) {
-            return Types::image();
+            return TypeRegistry::type(ImageType::class);
         }
 
         if ($object instanceof Story) {
-            return Types::story();
+            return TypeRegistry::type(StoryType::class);
         }
 
-        throw new Exception('Unknown type: ' . Utils::printSafe($object));
+        $notNode = Utils::printSafe($object);
+        throw new \Exception("Unknown type: {$notNode}");
     }
 }

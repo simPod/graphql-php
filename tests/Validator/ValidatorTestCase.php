@@ -2,9 +2,10 @@
 
 namespace GraphQL\Tests\Validator;
 
-use function array_map;
 use GraphQL\Error\Error;
 use GraphQL\Error\FormattedError;
+use GraphQL\Error\InvariantViolation;
+use GraphQL\Error\SyntaxError;
 use GraphQL\Error\UserError;
 use GraphQL\Language\AST\Node;
 use GraphQL\Language\DirectiveLocation;
@@ -26,6 +27,10 @@ abstract class ValidatorTestCase extends TestCase
 {
     /**
      * @param array<string, mixed> $options
+     *
+     * @throws \Exception
+     * @throws \ReflectionException
+     * @throws InvariantViolation
      */
     protected function expectPassesRule(ValidationRule $rule, string $queryString, array $options = []): void
     {
@@ -34,17 +39,22 @@ abstract class ValidatorTestCase extends TestCase
 
     /**
      * @param array<ValidationRule> $rules
-     * @param array<string, mixed>  $options
+     * @param array<string, mixed> $options
+     *
+     * @throws \Exception
+     * @throws \JsonException
+     * @throws SyntaxError
      */
     protected function expectValid(Schema $schema, array $rules, string $queryString, array $options = []): void
     {
-        self::assertEquals(
+        self::assertSame(
             [],
             DocumentValidator::validate($schema, Parser::parse($queryString, $options), $rules),
             'Should validate'
         );
     }
 
+    /** @throws InvariantViolation */
     public static function getTestSchema(): Schema
     {
         $Being = new InterfaceType([
@@ -108,6 +118,10 @@ abstract class ValidatorTestCase extends TestCase
                     'type' => Type::boolean(),
                     'args' => ['x' => ['type' => Type::int()], 'y' => ['type' => Type::int()]],
                 ],
+                'secretName' => [
+                    'type' => Type::string(),
+                    'visible' => false,
+                ],
             ],
             'interfaces' => [$Being, $Pet, $Canine],
         ]);
@@ -145,7 +159,7 @@ abstract class ValidatorTestCase extends TestCase
             'name' => 'Human',
             'interfaces' => [$Being, $Intelligent],
             'fields' => static function () use (&$Human, $Pet): array {
-                assert($Human instanceof ObjectType);
+                self::assertInstanceOf(ObjectType::class, $Human);
 
                 return [
                     'name' => [
@@ -207,9 +221,6 @@ abstract class ValidatorTestCase extends TestCase
 
         $ComplicatedArgs = new ObjectType([
             'name' => 'ComplicatedArgs',
-            // TODO List
-            // TODO Coercion
-            // TODO NotNulls
             'fields' => [
                 'intArgField' => [
                     'type' => Type::string(),
@@ -303,10 +314,10 @@ abstract class ValidatorTestCase extends TestCase
             'name' => 'Invalid',
             'serialize' => static fn ($value) => $value,
             'parseLiteral' => static function (Node $node): void {
-                throw new UserError("Invalid scalar is always invalid: {$node->value}");
+                throw new UserError("Invalid scalar is always invalid: {$node->kind}");
             },
-            'parseValue' => static function ($node): void {
-                throw new UserError("Invalid scalar is always invalid: {$node}");
+            'parseValue' => static function ($value): void {
+                throw new UserError("Invalid scalar is always invalid: {$value}");
             },
         ]);
 
@@ -356,10 +367,7 @@ abstract class ValidatorTestCase extends TestCase
         return new Schema([
             'query' => $queryRoot,
             'subscription' => $subscriptionRoot,
-            'directives' => [
-                Directive::includeDirective(),
-                Directive::skipDirective(),
-                Directive::deprecatedDirective(),
+            'directives' => array_merge(Directive::getInternalDirectives(), [
                 new Directive([
                     'name' => 'directive',
                     'locations' => [DirectiveLocation::FIELD, DirectiveLocation::FRAGMENT_DEFINITION],
@@ -409,13 +417,17 @@ abstract class ValidatorTestCase extends TestCase
                     'name' => 'onVariableDefinition',
                     'locations' => [DirectiveLocation::VARIABLE_DEFINITION],
                 ]),
-            ],
+            ]),
         ]);
     }
 
     /**
      * @param array<int, array<string, mixed>> $errors
-     * @param array<string, mixed>             $options
+     * @param array<string, mixed> $options
+     *
+     * @throws \Exception
+     * @throws \ReflectionException
+     * @throws InvariantViolation
      *
      * @return array<int, Error>
      */
@@ -429,9 +441,13 @@ abstract class ValidatorTestCase extends TestCase
     }
 
     /**
-     * @param array<ValidationRule>|null       $rules
+     * @param array<ValidationRule>|null $rules
      * @param array<int, array<string, mixed>> $expectedErrors
-     * @param array<string, mixed>             $options
+     * @param array<string, mixed> $options
+     *
+     * @throws \Exception
+     * @throws \JsonException
+     * @throws SyntaxError
      *
      * @return array<int, Error>
      */
@@ -445,6 +461,11 @@ abstract class ValidatorTestCase extends TestCase
         return $errors;
     }
 
+    /**
+     * @throws \Exception
+     * @throws \JsonException
+     * @throws SyntaxError
+     */
     protected function expectPassesRuleWithSchema(Schema $schema, ValidationRule $rule, string $queryString): void
     {
         $this->expectValid($schema, [$rule], $queryString);
@@ -452,6 +473,12 @@ abstract class ValidatorTestCase extends TestCase
 
     /**
      * @param array<int, array<string, mixed>> $errors
+     *
+     * @throws \Exception
+     * @throws \InvalidArgumentException
+     * @throws \ReflectionException
+     * @throws InvariantViolation
+     * @throws SyntaxError
      */
     protected function expectFailsRuleWithSchema(
         Schema $schema,
@@ -462,6 +489,12 @@ abstract class ValidatorTestCase extends TestCase
         $this->expectInvalid($schema, [$rule], $queryString, $errors);
     }
 
+    /**
+     * @throws \Exception
+     * @throws \JsonException
+     * @throws \ReflectionException
+     * @throws SyntaxError
+     */
     protected function expectPassesCompleteValidation(string $queryString): void
     {
         $this->expectValid(self::getTestSchema(), DocumentValidator::allRules(), $queryString);
@@ -469,6 +502,11 @@ abstract class ValidatorTestCase extends TestCase
 
     /**
      * @param array<int, array<string, mixed>> $errors
+     *
+     * @throws \Exception
+     * @throws \InvalidArgumentException
+     * @throws \ReflectionException
+     * @throws InvariantViolation
      */
     protected function expectFailsCompleteValidation(string $queryString, array $errors): void
     {
@@ -477,6 +515,10 @@ abstract class ValidatorTestCase extends TestCase
 
     /**
      * @param array<int, array<string, mixed>> $errors
+     *
+     * @throws \Exception
+     * @throws \JsonException
+     * @throws SyntaxError
      */
     protected function expectSDLErrorsFromRule(
         ValidationRule $rule,
@@ -491,6 +533,7 @@ abstract class ValidatorTestCase extends TestCase
         );
     }
 
+    /** @throws \Exception */
     protected function expectValidSDL(ValidationRule $rule, string $sdlString, ?Schema $schema = null): void
     {
         $this->expectSDLErrorsFromRule($rule, $sdlString, $schema, []);

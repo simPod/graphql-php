@@ -2,46 +2,27 @@
 
 namespace GraphQL\Language\AST;
 
-use function array_merge;
-use function array_splice;
-use ArrayAccess;
-use function count;
-use Countable;
+use GraphQL\Error\InvariantViolation;
 use GraphQL\Utils\AST;
-use function is_array;
-use function iterator_to_array;
-use IteratorAggregate;
-use ReturnTypeWillChange;
-use Traversable;
 
 /**
  * @template T of Node
- * @phpstan-implements ArrayAccess<array-key, T>
- * @phpstan-implements IteratorAggregate<array-key, T>
+ *
+ * @phpstan-implements \ArrayAccess<array-key, T>
+ * @phpstan-implements \IteratorAggregate<array-key, T>
  */
-class NodeList implements ArrayAccess, IteratorAggregate, Countable
+class NodeList implements \ArrayAccess, \IteratorAggregate, \Countable
 {
     /**
      * @var array<Node|array>
+     *
      * @phpstan-var array<T|array<string, mixed>>
      */
-    private $nodes;
-
-    /**
-     * @template TT of Node
-     *
-     * @param array<Node|array<string, mixed>> $nodes
-     * @phpstan-param array<TT|array<string, mixed>> $nodes
-     *
-     * @phpstan-return self<TT>
-     */
-    public static function create(array $nodes): self
-    {
-        return new static($nodes);
-    }
+    private array $nodes;
 
     /**
      * @param array<Node|array> $nodes
+     *
      * @phpstan-param array<T|array<string, mixed>> $nodes
      */
     public function __construct(array $nodes)
@@ -49,10 +30,8 @@ class NodeList implements ArrayAccess, IteratorAggregate, Countable
         $this->nodes = $nodes;
     }
 
-    /**
-     * @param int|string $offset
-     */
-    #[ReturnTypeWillChange]
+    /** @param int|string $offset */
+    #[\ReturnTypeWillChange]
     public function offsetExists($offset): bool
     {
         return isset($this->nodes[$offset]);
@@ -63,7 +42,7 @@ class NodeList implements ArrayAccess, IteratorAggregate, Countable
      *
      * @phpstan-return T
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function offsetGet($offset): Node
     {
         $item = $this->nodes[$offset];
@@ -77,11 +56,15 @@ class NodeList implements ArrayAccess, IteratorAggregate, Countable
     }
 
     /**
-     * @param int|string|null           $offset
+     * @param int|string|null $offset
      * @param Node|array<string, mixed> $value
+     *
      * @phpstan-param T|array<string, mixed> $value
+     *
+     * @throws \JsonException
+     * @throws InvariantViolation
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function offsetSet($offset, $value): void
     {
         if (is_array($value)) {
@@ -99,22 +82,38 @@ class NodeList implements ArrayAccess, IteratorAggregate, Countable
         $this->nodes[$offset] = $value;
     }
 
-    /**
-     * @param int|string $offset
-     */
-    #[ReturnTypeWillChange]
+    /** @param int|string $offset */
+    #[\ReturnTypeWillChange]
     public function offsetUnset($offset): void
     {
         unset($this->nodes[$offset]);
     }
 
+    public function getIterator(): \Traversable
+    {
+        foreach ($this->nodes as $key => $_) {
+            yield $key => $this->offsetGet($key);
+        }
+    }
+
+    public function count(): int
+    {
+        return count($this->nodes);
+    }
+
     /**
-     * @param T|array<T>|null $replacement
+     * Remove a portion of the NodeList and replace it with something else.
      *
-     * @phpstan-return NodeList<T>
+     * @param T|iterable<T>|null $replacement
+     *
+     * @phpstan-return NodeList<T> the NodeList with the extracted elements
      */
     public function splice(int $offset, int $length, $replacement = null): NodeList
     {
+        if (is_iterable($replacement) && ! is_array($replacement)) {
+            $replacement = iterator_to_array($replacement);
+        }
+
         return new NodeList(
             array_splice($this->nodes, $offset, $length, $replacement)
         );
@@ -134,27 +133,25 @@ class NodeList implements ArrayAccess, IteratorAggregate, Countable
         return new NodeList(array_merge($this->nodes, $list));
     }
 
-    public function getIterator(): Traversable
+    /** Resets the keys of the stored nodes to contiguous numeric indexes. */
+    public function reindex(): void
     {
-        foreach ($this->nodes as $key => $_) {
-            yield $key => $this->offsetGet($key);
-        }
-    }
-
-    public function count(): int
-    {
-        return count($this->nodes);
+        $this->nodes = array_values($this->nodes);
     }
 
     /**
      * Returns a clone of this instance and all its children, except Location $loc.
      *
+     * @throws \JsonException
+     * @throws InvariantViolation
+     *
      * @return static<T>
      */
     public function cloneDeep(): self
     {
-        /** @var static<T> $cloned */
-        $cloned = new static([]);
+        /** @var array<T> $empty */
+        $empty = [];
+        $cloned = new static($empty);
         foreach ($this->getIterator() as $key => $node) {
             $cloned[$key] = $node->cloneDeep();
         }

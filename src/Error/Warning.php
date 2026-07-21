@@ -2,12 +2,6 @@
 
 namespace GraphQL\Error;
 
-use const E_USER_WARNING;
-use function gettype;
-use InvalidArgumentException;
-use function is_int;
-use function trigger_error;
-
 /**
  * Encapsulates warnings produced by the library.
  *
@@ -15,9 +9,6 @@ use function trigger_error;
  * Also, it is possible to override warning handler (which is **trigger_error()** by default).
  *
  * @phpstan-type WarningHandler callable(string $errorMessage, int $warningId, ?int $messageLevel): void
- *
- * @see https://github.com/vimeo/psalm/issues/7527
- * @psalm-type WarningHandler callable(string, int, int|null): void
  */
 final class Warning
 {
@@ -36,6 +27,7 @@ final class Warning
 
     /**
      * @var callable|null
+     *
      * @phpstan-var WarningHandler|null
      */
     private static $warningHandler;
@@ -75,7 +67,7 @@ final class Warning
             self::$enableWarnings &= ~$suppress;
         } else {
             $type = gettype($suppress);
-            throw new InvalidArgumentException("Expected type bool|int, got {$type}.");
+            throw new \InvalidArgumentException("Expected type bool|int, got {$type}.");
         }
     }
 
@@ -101,13 +93,13 @@ final class Warning
             self::$enableWarnings |= $enable;
         } else {
             $type = gettype($enable);
-            throw new InvalidArgumentException("Expected type bool|int, got {$type}.");
+            throw new \InvalidArgumentException("Expected type bool|int, got {$type}.");
         }
     }
 
     public static function warnOnce(string $errorMessage, int $warningId, ?int $messageLevel = null): void
     {
-        $messageLevel ??= E_USER_WARNING;
+        $messageLevel ??= \E_USER_WARNING;
 
         if (self::$warningHandler !== null) {
             (self::$warningHandler)($errorMessage, $warningId, $messageLevel);
@@ -119,7 +111,7 @@ final class Warning
 
     public static function warn(string $errorMessage, int $warningId, ?int $messageLevel = null): void
     {
-        $messageLevel ??= E_USER_WARNING;
+        $messageLevel ??= \E_USER_WARNING;
 
         if (self::$warningHandler !== null) {
             (self::$warningHandler)($errorMessage, $warningId, $messageLevel);

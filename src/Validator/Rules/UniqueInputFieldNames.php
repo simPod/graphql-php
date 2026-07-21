@@ -2,7 +2,6 @@
 
 namespace GraphQL\Validator\Rules;
 
-use function array_pop;
 use GraphQL\Error\Error;
 use GraphQL\Language\AST\NameNode;
 use GraphQL\Language\AST\NodeKind;
@@ -34,9 +33,7 @@ class UniqueInputFieldNames extends ValidationRule
         return $this->getASTVisitor($context);
     }
 
-    /**
-     * @phpstan-return VisitorArray
-     */
+    /** @phpstan-return VisitorArray */
     public function getASTVisitor(ValidationContext $context): array
     {
         $this->knownNames = [];

@@ -5,15 +5,12 @@ namespace GraphQL\Tests\Utils;
 use GraphQL\Error\Error;
 use GraphQL\Utils\Utils;
 use PHPUnit\Framework\TestCase;
-use TypeError;
 
-class AssertValidNameTest extends TestCase
+final class AssertValidNameTest extends TestCase
 {
     // Describe: assertValidName()
 
-    /**
-     * @see it('throws for use of leading double underscores')
-     */
+    /** @see it('throws for use of leading double underscores') */
     public function testThrowsForUseOfLeadingDoubleUnderscores(): void
     {
         $this->expectException(Error::class);
@@ -21,19 +18,15 @@ class AssertValidNameTest extends TestCase
         Utils::assertValidName('__bad');
     }
 
-    /**
-     * @see it('throws for non-strings')
-     */
+    /** @see it('throws for non-strings') */
     public function testThrowsForNonStrings(): void
     {
-        $this->expectException(TypeError::class);
+        $this->expectException(\TypeError::class);
         // @phpstan-ignore-next-line purposefully wrong
         Utils::assertValidName([]);
     }
 
-    /**
-     * @see it('throws for names with invalid characters')
-     */
+    /** @see it('throws for names with invalid characters') */
     public function testThrowsForNamesWithInvalidCharacters(): void
     {
         $this->expectException(Error::class);

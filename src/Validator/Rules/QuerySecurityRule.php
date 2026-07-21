@@ -2,7 +2,7 @@
 
 namespace GraphQL\Validator\Rules;
 
-use ArrayObject;
+use GraphQL\Error\InvariantViolation;
 use GraphQL\Language\AST\FieldNode;
 use GraphQL\Language\AST\FragmentDefinitionNode;
 use GraphQL\Language\AST\FragmentSpreadNode;
@@ -13,15 +13,15 @@ use GraphQL\Type\Definition\FieldDefinition;
 use GraphQL\Type\Definition\HasFieldsType;
 use GraphQL\Type\Definition\Type;
 use GraphQL\Type\Introspection;
-use GraphQL\Utils\TypeInfo;
+use GraphQL\Utils\AST;
 use GraphQL\Validator\QueryValidationContext;
-use InvalidArgumentException;
 
 /**
  * @see Visitor, FieldDefinition
  *
  * @phpstan-import-type VisitorArray from Visitor
- * @phpstan-type ASTAndDefs ArrayObject<string, ArrayObject<int, array{FieldNode, FieldDefinition|null}>>
+ *
+ * @phpstan-type ASTAndDefs \ArrayObject<string, \ArrayObject<int, array{FieldNode, FieldDefinition|null}>>
  */
 abstract class QuerySecurityRule extends ValidationRule
 {
@@ -30,10 +30,11 @@ abstract class QuerySecurityRule extends ValidationRule
     /** @var array<string, FragmentDefinitionNode> */
     protected array $fragments = [];
 
+    /** @throws \InvalidArgumentException */
     protected function checkIfGreaterOrEqualToZero(string $name, int $value): void
     {
         if ($value < 0) {
-            throw new InvalidArgumentException("\${$name} argument must be greater or equal to 0.");
+            throw new \InvalidArgumentException("\${$name} argument must be greater or equal to 0.");
         }
     }
 
@@ -42,9 +43,7 @@ abstract class QuerySecurityRule extends ValidationRule
         return $this->fragments[$fragmentSpread->name->value] ?? null;
     }
 
-    /**
-     * @return array<string, FragmentDefinitionNode>
-     */
+    /** @return array<string, FragmentDefinitionNode> */
     protected function getFragments(): array
     {
         return $this->fragments;
@@ -90,8 +89,13 @@ abstract class QuerySecurityRule extends ValidationRule
      *
      * @see \GraphQL\Validator\Rules\OverlappingFieldsCanBeMerged
      *
-     * @param ArrayObject<string, true>|null $visitedFragmentNames
+     * @param \ArrayObject<string, true>|null $visitedFragmentNames
+     *
      * @phpstan-param ASTAndDefs|null $astAndDefs
+     *
+     * @throws \Exception
+     * @throws \ReflectionException
+     * @throws InvariantViolation
      *
      * @phpstan-return ASTAndDefs
      */
@@ -99,73 +103,70 @@ abstract class QuerySecurityRule extends ValidationRule
         QueryValidationContext $context,
         ?Type $parentType,
         SelectionSetNode $selectionSet,
-        ?ArrayObject $visitedFragmentNames = null,
-        ?ArrayObject $astAndDefs = null
-    ): ArrayObject {
-        $visitedFragmentNames ??= new ArrayObject();
-        $astAndDefs ??= new ArrayObject();
+        ?\ArrayObject $visitedFragmentNames = null,
+        ?\ArrayObject $astAndDefs = null
+    ): \ArrayObject {
+        $visitedFragmentNames ??= new \ArrayObject();
+        $astAndDefs ??= new \ArrayObject();
 
         foreach ($selectionSet->selections as $selection) {
-            switch (true) {
-                case $selection instanceof FieldNode:
-                    $fieldName = $selection->name->value;
+            if ($selection instanceof FieldNode) {
+                $fieldName = $selection->name->value;
 
-                    $fieldDef = null;
-                    if ($parentType instanceof HasFieldsType) {
-                        $schemaMetaFieldDef = Introspection::schemaMetaFieldDef();
-                        $typeMetaFieldDef = Introspection::typeMetaFieldDef();
-                        $typeNameMetaFieldDef = Introspection::typeNameMetaFieldDef();
+                $fieldDef = null;
+                if ($parentType instanceof HasFieldsType) {
+                    $schemaMetaFieldDef = Introspection::schemaMetaFieldDef();
+                    $typeMetaFieldDef = Introspection::typeMetaFieldDef();
+                    $typeNameMetaFieldDef = Introspection::typeNameMetaFieldDef();
 
-                        $queryType = $context->getSchema()->getQueryType();
+                    $queryType = $context->getSchema()->getQueryType();
 
-                        if ($fieldName === $schemaMetaFieldDef->name && $queryType === $parentType) {
-                            $fieldDef = $schemaMetaFieldDef;
-                        } elseif ($fieldName === $typeMetaFieldDef->name && $queryType === $parentType) {
-                            $fieldDef = $typeMetaFieldDef;
-                        } elseif ($fieldName === $typeNameMetaFieldDef->name) {
-                            $fieldDef = $typeNameMetaFieldDef;
-                        } elseif ($parentType->hasField($fieldName)) {
-                            $fieldDef = $parentType->getField($fieldName);
-                        }
+                    if ($fieldName === $schemaMetaFieldDef->name && $queryType === $parentType) {
+                        $fieldDef = $schemaMetaFieldDef;
+                    } elseif ($fieldName === $typeMetaFieldDef->name && $queryType === $parentType) {
+                        $fieldDef = $typeMetaFieldDef;
+                    } elseif ($fieldName === $typeNameMetaFieldDef->name) {
+                        $fieldDef = $typeNameMetaFieldDef;
+                    } elseif ($parentType->hasField($fieldName)) {
+                        $fieldDef = $parentType->getField($fieldName);
                     }
+                }
 
-                    $responseName = $this->getFieldName($selection);
-                    $responseContext = $astAndDefs[$responseName] ??= new ArrayObject();
-                    $responseContext[] = [$selection, $fieldDef];
-                    break;
-                case $selection instanceof InlineFragmentNode:
-                    $typeCondition = $selection->typeCondition;
-                    $fragmentParentType = $typeCondition === null
-                        ? $parentType
-                        : TypeInfo::typeFromAST($context->getSchema(), $typeCondition);
-                    $astAndDefs = $this->collectFieldASTsAndDefs(
-                        $context,
-                        $fragmentParentType,
-                        $selection->selectionSet,
-                        $visitedFragmentNames,
-                        $astAndDefs
-                    );
-                    break;
-                case $selection instanceof FragmentSpreadNode:
-                    $fragName = $selection->name->value;
+                $responseName = $this->getFieldName($selection);
+                $responseContext = $astAndDefs[$responseName] ??= new \ArrayObject();
+                $responseContext[] = [$selection, $fieldDef];
+            } elseif ($selection instanceof InlineFragmentNode) {
+                $typeCondition = $selection->typeCondition;
+                $fragmentParentType = $typeCondition === null
+                    ? $parentType
+                    : AST::typeFromAST([$context->getSchema(), 'getType'], $typeCondition);
+                $astAndDefs = $this->collectFieldASTsAndDefs(
+                    $context,
+                    $fragmentParentType,
+                    $selection->selectionSet,
+                    $visitedFragmentNames,
+                    $astAndDefs
+                );
+            } elseif ($selection instanceof FragmentSpreadNode) {
+                $fragName = $selection->name->value;
 
-                    if (! isset($visitedFragmentNames[$fragName])) {
-                        $visitedFragmentNames[$fragName] = true;
+                if (isset($visitedFragmentNames[$fragName])) {
+                    continue;
+                }
+                $visitedFragmentNames[$fragName] = true;
 
-                        $fragment = $context->getFragment($fragName);
+                $fragment = $context->getFragment($fragName);
+                if ($fragment === null) {
+                    continue;
+                }
 
-                        if ($fragment !== null) {
-                            $astAndDefs = $this->collectFieldASTsAndDefs(
-                                $context,
-                                TypeInfo::typeFromAST($context->getSchema(), $fragment->typeCondition),
-                                $fragment->selectionSet,
-                                $visitedFragmentNames,
-                                $astAndDefs
-                            );
-                        }
-                    }
-
-                    break;
+                $astAndDefs = $this->collectFieldASTsAndDefs(
+                    $context,
+                    AST::typeFromAST([$context->getSchema(), 'getType'], $fragment->typeCondition),
+                    $fragment->selectionSet,
+                    $visitedFragmentNames,
+                    $astAndDefs
+                );
             }
         }
 

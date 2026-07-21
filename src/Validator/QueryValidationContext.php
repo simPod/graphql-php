@@ -2,9 +2,6 @@
 
 namespace GraphQL\Validator;
 
-use function array_merge;
-use function array_pop;
-use function count;
 use GraphQL\Error\Error;
 use GraphQL\Language\AST\DocumentNode;
 use GraphQL\Language\AST\FieldNode;
@@ -15,7 +12,6 @@ use GraphQL\Language\AST\InlineFragmentNode;
 use GraphQL\Language\AST\Node;
 use GraphQL\Language\AST\NodeKind;
 use GraphQL\Language\AST\OperationDefinitionNode;
-use GraphQL\Language\AST\SelectionSetNode;
 use GraphQL\Language\AST\VariableNode;
 use GraphQL\Language\Visitor;
 use GraphQL\Type\Definition\Argument;
@@ -26,7 +22,6 @@ use GraphQL\Type\Definition\InputType;
 use GraphQL\Type\Definition\Type;
 use GraphQL\Type\Schema;
 use GraphQL\Utils\TypeInfo;
-use SplObjectStorage;
 
 /**
  * An instance of this class is passed as the "this" context to all validators,
@@ -41,7 +36,7 @@ class QueryValidationContext implements ValidationContext
 
     protected DocumentNode $ast;
 
-    /** @var array<int, Error> */
+    /** @var list<Error> */
     protected array $errors = [];
 
     private TypeInfo $typeInfo;
@@ -49,17 +44,17 @@ class QueryValidationContext implements ValidationContext
     /** @var array<string, FragmentDefinitionNode> */
     private array $fragments;
 
-    /** @var SplObjectStorage<HasSelectionSet, array<int, FragmentSpreadNode>> */
-    private SplObjectStorage $fragmentSpreads;
+    /** @var \SplObjectStorage<HasSelectionSet, array<int, FragmentSpreadNode>> */
+    private \SplObjectStorage $fragmentSpreads;
 
-    /** @var SplObjectStorage<OperationDefinitionNode, array<int, FragmentDefinitionNode>> */
-    private SplObjectStorage $recursivelyReferencedFragments;
+    /** @var \SplObjectStorage<OperationDefinitionNode, array<int, FragmentDefinitionNode>> */
+    private \SplObjectStorage $recursivelyReferencedFragments;
 
-    /** @var SplObjectStorage<HasSelectionSet, array<int, VariableUsage>> */
-    private SplObjectStorage $variableUsages;
+    /** @var \SplObjectStorage<HasSelectionSet, array<int, VariableUsage>> */
+    private \SplObjectStorage $variableUsages;
 
-    /** @var SplObjectStorage<HasSelectionSet, array<int, VariableUsage>> */
-    private SplObjectStorage $recursiveVariableUsages;
+    /** @var \SplObjectStorage<HasSelectionSet, array<int, VariableUsage>> */
+    private \SplObjectStorage $recursiveVariableUsages;
 
     public function __construct(Schema $schema, DocumentNode $ast, TypeInfo $typeInfo)
     {
@@ -67,10 +62,10 @@ class QueryValidationContext implements ValidationContext
         $this->ast = $ast;
         $this->typeInfo = $typeInfo;
 
-        $this->fragmentSpreads = new SplObjectStorage();
-        $this->recursivelyReferencedFragments = new SplObjectStorage();
-        $this->variableUsages = new SplObjectStorage();
-        $this->recursiveVariableUsages = new SplObjectStorage();
+        $this->fragmentSpreads = new \SplObjectStorage();
+        $this->recursivelyReferencedFragments = new \SplObjectStorage();
+        $this->variableUsages = new \SplObjectStorage();
+        $this->recursiveVariableUsages = new \SplObjectStorage();
     }
 
     public function reportError(Error $error): void
@@ -78,9 +73,7 @@ class QueryValidationContext implements ValidationContext
         $this->errors[] = $error;
     }
 
-    /**
-     * @return array<int, Error>
-     */
+    /** @return list<Error> */
     public function getErrors(): array
     {
         return $this->errors;
@@ -97,6 +90,8 @@ class QueryValidationContext implements ValidationContext
     }
 
     /**
+     * @throws \Exception
+     *
      * @phpstan-return array<int, VariableUsage>
      */
     public function getRecursiveVariableUsages(OperationDefinitionNode $operation): array
@@ -122,6 +117,8 @@ class QueryValidationContext implements ValidationContext
     /**
      * @param HasSelectionSet&Node $node
      *
+     * @throws \Exception
+     *
      * @phpstan-return array<int, VariableUsage>
      */
     private function getVariableUsages(HasSelectionSet $node): array
@@ -134,11 +131,8 @@ class QueryValidationContext implements ValidationContext
                 Visitor::visitWithTypeInfo(
                     $typeInfo,
                     [
-                        NodeKind::VARIABLE_DEFINITION => static fn (): bool => false,
-                        NodeKind::VARIABLE => static function (VariableNode $variable) use (
-                            &$usages,
-                            $typeInfo
-                        ): void {
+                        NodeKind::VARIABLE_DEFINITION => static fn () => Visitor::skipNode(),
+                        NodeKind::VARIABLE => static function (VariableNode $variable) use (&$usages, $typeInfo): void {
                             $usages[] = [
                                 'node' => $variable,
                                 'type' => $typeInfo->getInputType(),
@@ -155,9 +149,7 @@ class QueryValidationContext implements ValidationContext
         return $this->variableUsages[$node];
     }
 
-    /**
-     * @return array<int, FragmentDefinitionNode>
-     */
+    /** @return array<int, FragmentDefinitionNode> */
     public function getRecursivelyReferencedFragments(OperationDefinitionNode $operation): array
     {
         $fragments = $this->recursivelyReferencedFragments[$operation] ?? null;
@@ -166,7 +158,7 @@ class QueryValidationContext implements ValidationContext
             $fragments = [];
             $collectedNames = [];
             $nodesToVisit = [$operation];
-            while (count($nodesToVisit) > 0) {
+            while ($nodesToVisit !== []) {
                 $node = array_pop($nodesToVisit);
                 $spreads = $this->getFragmentSpreads($node);
                 foreach ($spreads as $spread) {
@@ -204,9 +196,8 @@ class QueryValidationContext implements ValidationContext
         if ($spreads === null) {
             $spreads = [];
 
-            /** @var array<int, SelectionSetNode> $setsToVisit */
-            $setsToVisit = [$node->selectionSet];
-            while (count($setsToVisit) > 0) {
+            $setsToVisit = [$node->getSelectionSet()];
+            while ($setsToVisit !== []) {
                 $set = array_pop($setsToVisit);
 
                 foreach ($set->selections as $selection) {
@@ -250,25 +241,19 @@ class QueryValidationContext implements ValidationContext
         return $this->typeInfo->getType();
     }
 
-    /**
-     * @return (CompositeType&Type)|null
-     */
+    /** @return (CompositeType&Type)|null */
     public function getParentType(): ?CompositeType
     {
         return $this->typeInfo->getParentType();
     }
 
-    /**
-     * @return (Type&InputType)|null
-     */
+    /** @return (Type&InputType)|null */
     public function getInputType(): ?InputType
     {
         return $this->typeInfo->getInputType();
     }
 
-    /**
-     * @return (Type&InputType)|null
-     */
+    /** @return (Type&InputType)|null */
     public function getParentInputType(): ?InputType
     {
         return $this->typeInfo->getParentInputType();

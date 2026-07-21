@@ -19,7 +19,7 @@ use GraphQL\Utils\Utils;
 use GraphQL\Validator\SDLValidationContext;
 
 /**
- * Possible type extension.
+ * Possible type extensions.
  *
  * A type extension is only valid if the type is defined and has the same kind.
  */
@@ -33,7 +33,8 @@ class PossibleTypeExtensions extends ValidationRule
         $definedTypes = [];
         foreach ($context->getDocument()->definitions as $def) {
             if ($def instanceof TypeDefinitionNode) {
-                $definedTypes[$def->name->value] = $def;
+                $name = $def->getName()->value;
+                $definedTypes[$name] = $def;
             }
         }
 
@@ -56,7 +57,7 @@ class PossibleTypeExtensions extends ValidationRule
                     $kindStr = self::extensionKindToTypeName($node->kind);
                     $context->reportError(
                         new Error(
-                            'Cannot extend non-' . $kindStr . ' type "' . $typeName . '".',
+                            "Cannot extend non-{$kindStr} type \"{$typeName}\".",
                             $defNode !== null
                                 ? [$defNode, $node]
                                 : $node,
@@ -72,12 +73,12 @@ class PossibleTypeExtensions extends ValidationRule
                     ...array_keys($existingTypesMap),
                 ];
                 $suggestedTypes = Utils::suggestionList($typeName, $allTypeNames);
-                $didYouMean = \count($suggestedTypes) > 0
-                    ? ' Did you mean ' . Utils::quotedOrList($suggestedTypes) . '?'
-                    : '';
+                $didYouMean = $suggestedTypes === []
+                    ? ''
+                    : ' Did you mean ' . Utils::quotedOrList($suggestedTypes) . '?';
                 $context->reportError(
                     new Error(
-                        'Cannot extend type "' . $typeName . '" because it is not defined.' . $didYouMean,
+                        "Cannot extend type \"{$typeName}\" because it is not defined.{$didYouMean}",
                         $node->name,
                     ),
                 );
@@ -96,6 +97,7 @@ class PossibleTypeExtensions extends ValidationRule
         ];
     }
 
+    /** @throws InvariantViolation */
     private static function defKindToExtKind(string $kind): string
     {
         switch ($kind) {
@@ -112,10 +114,11 @@ class PossibleTypeExtensions extends ValidationRule
             case NodeKind::INPUT_OBJECT_TYPE_DEFINITION:
                 return NodeKind::INPUT_OBJECT_TYPE_EXTENSION;
             default:
-                throw new InvariantViolation("Unexpected definition kind: {$kind}");
+                throw new InvariantViolation("Unexpected definition kind: {$kind}.");
         }
     }
 
+    /** @throws InvariantViolation */
     private static function typeToExtKind(NamedType $type): string
     {
         switch (true) {
@@ -132,10 +135,12 @@ class PossibleTypeExtensions extends ValidationRule
             case $type instanceof InputObjectType:
                 return NodeKind::INPUT_OBJECT_TYPE_EXTENSION;
             default:
-                throw new InvariantViolation('Unexpected type: ' . Utils::printSafe($type));
+                $unexpectedType = Utils::printSafe($type);
+                throw new InvariantViolation("Unexpected type: {$unexpectedType}.");
         }
     }
 
+    /** @throws InvariantViolation */
     private static function extensionKindToTypeName(string $kind): string
     {
         switch ($kind) {
@@ -152,7 +157,7 @@ class PossibleTypeExtensions extends ValidationRule
             case NodeKind::INPUT_OBJECT_TYPE_EXTENSION:
                 return 'input object';
             default:
-                throw new InvariantViolation("Unexpected extension kind: {$kind}");
+                throw new InvariantViolation("Unexpected extension kind: {$kind}.");
         }
     }
 }

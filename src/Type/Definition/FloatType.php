@@ -9,11 +9,6 @@ use GraphQL\Language\AST\IntValueNode;
 use GraphQL\Language\AST\Node;
 use GraphQL\Language\Printer;
 use GraphQL\Utils\Utils;
-use function is_bool;
-use function is_finite;
-use function is_float;
-use function is_int;
-use function is_numeric;
 
 class FloatType extends ScalarType
 {
@@ -24,6 +19,7 @@ class FloatType extends ScalarType
 values as specified by
 [IEEE 754](http://en.wikipedia.org/wiki/IEEE_floating_point). ';
 
+    /** @throws SerializationError */
     public function serialize($value): float
     {
         $float = is_numeric($value) || is_bool($value)
@@ -31,15 +27,14 @@ values as specified by
             : null;
 
         if ($float === null || ! is_finite($float)) {
-            throw new SerializationError(
-                'Float cannot represent non numeric value: '
-                . Utils::printSafe($value)
-            );
+            $notFloat = Utils::printSafe($value);
+            throw new SerializationError("Float cannot represent non numeric value: {$notFloat}");
         }
 
         return $float;
     }
 
+    /** @throws Error */
     public function parseValue($value): float
     {
         $float = is_float($value) || is_int($value)
@@ -47,13 +42,17 @@ values as specified by
             : null;
 
         if ($float === null || ! is_finite($float)) {
-            $notFloat = Utils::printSafe($value);
+            $notFloat = Utils::printSafeJson($value);
             throw new Error("Float cannot represent non numeric value: {$notFloat}");
         }
 
         return $float;
     }
 
+    /**
+     * @throws \JsonException
+     * @throws Error
+     */
     public function parseLiteral(Node $valueNode, ?array $variables = null)
     {
         if ($valueNode instanceof FloatValueNode || $valueNode instanceof IntValueNode) {

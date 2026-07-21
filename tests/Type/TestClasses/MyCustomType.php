@@ -5,15 +5,14 @@ namespace GraphQL\Tests\Type\TestClasses;
 use GraphQL\Type\Definition\ObjectType;
 use GraphQL\Type\Definition\Type;
 
-class MyCustomType extends ObjectType
+final class MyCustomType extends ObjectType
 {
     public function __construct()
     {
-        $config = [
+        parent::__construct([
             'fields' => [
                 'a' => Type::string(),
             ],
-        ];
-        parent::__construct($config);
+        ]);
     }
 }

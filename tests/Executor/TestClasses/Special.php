@@ -2,15 +2,11 @@
 
 namespace GraphQL\Tests\Executor\TestClasses;
 
-class Special
+final class Special
 {
-    /** @var string */
-    public $value;
+    public string $value;
 
-    /**
-     * @param string $value
-     */
-    public function __construct($value)
+    public function __construct(string $value)
     {
         $this->value = $value;
     }

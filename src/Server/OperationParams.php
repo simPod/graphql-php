@@ -2,13 +2,6 @@
 
 namespace GraphQL\Server;
 
-use function array_change_key_case;
-use const CASE_LOWER;
-use function is_string;
-use function json_decode;
-use const JSON_ERROR_NONE;
-use function json_last_error;
-
 /**
  * Structure representing parsed HTTP parameters for GraphQL operation.
  *
@@ -95,7 +88,7 @@ class OperationParams
     {
         $instance = new static();
 
-        $params = array_change_key_case($params, CASE_LOWER);
+        $params = array_change_key_case($params, \CASE_LOWER);
         $instance->originalInput = $params;
 
         $params += [
@@ -124,7 +117,6 @@ class OperationParams
         // Apollo server/client compatibility
         if (
             isset($instance->extensions['persistedQuery']['sha256Hash'])
-            && $instance->query === null
             && $instance->queryId === null
         ) {
             $instance->queryId = $instance->extensions['persistedQuery']['sha256Hash'];
@@ -147,7 +139,7 @@ class OperationParams
         }
 
         $decoded = json_decode($value, true);
-        if (json_last_error() === JSON_ERROR_NONE) {
+        if (json_last_error() === \JSON_ERROR_NONE) {
             return $decoded;
         }
 

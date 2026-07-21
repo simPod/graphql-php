@@ -11,12 +11,14 @@ class NonNull extends Type implements WrappingType, OutputType, InputType
 {
     /**
      * @var Type|callable
+     *
      * @phpstan-var WrappedType
      */
     private $wrappedType;
 
     /**
      * @param Type|callable $type
+     *
      * @phpstan-param WrappedType $type
      */
     public function __construct($type)
@@ -29,9 +31,7 @@ class NonNull extends Type implements WrappingType, OutputType, InputType
         return $this->getWrappedType()->toString() . '!';
     }
 
-    /**
-     * @return NullableType&Type
-     */
+    /** @return NullableType&Type */
     public function getWrappedType(): Type
     {
         return Schema::resolveType($this->wrappedType);

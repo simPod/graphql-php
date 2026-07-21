@@ -2,10 +2,7 @@
 
 namespace GraphQL\Type\Definition;
 
-use function array_key_exists;
 use GraphQL\Error\InvariantViolation;
-use function preg_replace;
-use ReflectionClass;
 
 /**
  * @see NamedType
@@ -21,16 +18,17 @@ trait NamedTypeImplementation
         return $this->name;
     }
 
+    /** @throws InvariantViolation */
     protected function inferName(): string
     {
-        if (isset($this->name)) {
+        if (isset($this->name)) { // @phpstan-ignore-line property might be uninitialized
             return $this->name;
         }
 
         // If class is extended - infer name from className
         // QueryType -> Type
         // SomeOtherType -> SomeOther
-        $reflection = new ReflectionClass($this);
+        $reflection = new \ReflectionClass($this);
         $name = $reflection->getShortName();
 
         if ($reflection->getNamespaceName() !== __NAMESPACE__) {
@@ -45,6 +43,16 @@ trait NamedTypeImplementation
 
     public function isBuiltInType(): bool
     {
-        return array_key_exists($this->name, Type::getAllBuiltInTypes());
+        return in_array($this->name, Type::BUILT_IN_TYPE_NAMES, true);
+    }
+
+    public function name(): string
+    {
+        return $this->name;
+    }
+
+    public function description(): ?string
+    {
+        return $this->description;
     }
 }

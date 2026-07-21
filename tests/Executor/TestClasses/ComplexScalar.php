@@ -5,36 +5,40 @@ namespace GraphQL\Tests\Executor\TestClasses;
 use GraphQL\Error\Error;
 use GraphQL\Error\SerializationError;
 use GraphQL\Language\AST\Node;
+use GraphQL\Language\Printer;
 use GraphQL\Type\Definition\ScalarType;
 use GraphQL\Utils\Utils;
 
-class ComplexScalar extends ScalarType
+final class ComplexScalar extends ScalarType
 {
     public string $name = 'ComplexScalar';
 
-    public static function create(): self
-    {
-        return new self();
-    }
-
+    /** @throws SerializationError */
     public function serialize($value): string
     {
         if ($value === 'DeserializedValue') {
             return 'SerializedValue';
         }
 
-        throw new SerializationError('Cannot serialize value as ComplexScalar: ' . Utils::printSafe($value));
+        $notComplexScalar = Utils::printSafe($value);
+        throw new SerializationError("Cannot serialize value as ComplexScalar: {$notComplexScalar}");
     }
 
+    /** @throws Error */
     public function parseValue($value): string
     {
         if ($value === 'SerializedValue') {
             return 'DeserializedValue';
         }
 
-        throw new Error('Cannot represent value as ComplexScalar: ' . Utils::printSafe($value));
+        $notComplexScalar = Utils::printSafeJson($value);
+        throw new Error("Cannot represent value as ComplexScalar: {$notComplexScalar}");
     }
 
+    /**
+     * @throws \JsonException
+     * @throws Error
+     */
     public function parseLiteral(Node $valueNode, ?array $variables = null): string
     {
         $value = property_exists($valueNode, 'value')
@@ -45,6 +49,7 @@ class ComplexScalar extends ScalarType
             return 'DeserializedValue';
         }
 
-        throw new Error('Cannot represent literal as ComplexScalar: ' . Utils::printSafe($value));
+        $notComplexScalar = Printer::doPrint($value);
+        throw new Error("Cannot represent literal as ComplexScalar: {$notComplexScalar}");
     }
 }

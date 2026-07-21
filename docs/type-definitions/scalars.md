@@ -1,10 +1,11 @@
 # Scalar Type Definition
-Scalar types represent primitive leaf values in a GraphQL type system. 
+
+Scalar types represent primitive leaf values in a GraphQL type system.
 When object fields have to resolve to some concrete data, that's where the scalar types come in.
 
 ## Built-in Scalar Types
 
-The GraphQL specification describes several built-in scalar types. In **graphql-php** they are 
+The GraphQL specification describes several built-in scalar types. In **graphql-php** they are
 exposed as static methods of the class [`GraphQL\Type\Definition\Type`](../class-reference.md#graphqltypedefinitiontype):
 
 ```php
@@ -19,24 +20,24 @@ Type::id();      // ID type
 ```
 
 Those methods return instances of a subclass of `GraphQL\Type\Definition\ScalarType`.
-Use them directly in type definitions or wrapped in a type registry (see [lazy loading of types](../schema-definition.md#lazy-loading-of-types)). 
+Use them directly in type definitions or wrapped in a type registry (see [lazy loading of types](../schema-definition.md#lazy-loading-of-types)).
 
 ## Writing Custom Scalar Types
 
-In addition to built-in scalars, you can define your own scalar types with additional validation. 
+In addition to built-in scalars, you can define your own scalar types with additional validation.
 Typical examples of such types are **Email**, **Date**, **Url**, etc.
 
 In order to implement your own type, you must understand how scalars are handled in GraphQL.
 GraphQL deals with scalars in the following cases:
 
-1. Convert the **internal representation** of a value, returned by your app (e.g. stored in a database 
-or hardcoded in the source code), to a **serialized representation** included in the response.
- 
-2. Convert an **input value**, passed by a client in variables along with a GraphQL query, to 
-its **internal representation** used in your application.
+1. Convert the **internal representation** of a value, returned by your app (e.g. stored in a database
+   or hardcoded in the source code), to a **serialized representation** included in the response.
 
-3. Convert an **input literal value**, hardcoded in a GraphQL query (e.g. field argument value), to 
-its **internal representation** used in your application.
+2. Convert an **input value**, passed by a client in variables along with a GraphQL query, to
+   its **internal representation** used in your application.
+
+3. Convert an **input literal value**, hardcoded in a GraphQL query (e.g. field argument value), to
+   its **internal representation** used in your application.
 
 Those cases are covered by the methods `serialize`, `parseValue` and `parseLiteral` of the
 abstract class `ScalarType` respectively.
@@ -52,7 +53,7 @@ use GraphQL\Utils\Utils;
 
 class EmailType extends ScalarType
 {
-    // Note: name can be omitted. In this case it will be inferred from class name 
+    // Note: name can be omitted. In this case it will be inferred from class name
     // (suffix "Type" will be dropped)
     public string $name = 'Email';
 
@@ -105,3 +106,59 @@ $emailType = new CustomScalarType([
 
 Keep in mind the passed functions will be called statically, so a passed in `callable`
 such as `[Foo::class, 'bar']` should only reference static class methods.
+
+## Linking a Scalar to Its Specification
+
+The `@specifiedBy` built-in directive lets you attach a URL to a custom scalar that specifies the behavior of that scalar.
+This URL is exposed through introspection and printed in SDL output.
+
+Pass `specifiedByURL` when constructing the type:
+
+```php
+use GraphQL\Type\Definition\CustomScalarType;
+
+$uuidType = new CustomScalarType([
+    'name' => 'UUID',
+    'specifiedByURL' => 'https://tools.ietf.org/html/rfc4122',
+    'serialize' => static function ($value) { /* ... */ },
+    'parseValue' => static function ($value) { /* ... */ },
+    'parseLiteral' => static function ($valueNode, ?array $variables = null) { /* ... */ },
+]);
+
+$uuidType->specifiedByURL; // "https://tools.ietf.org/html/rfc4122"
+```
+
+When building a schema from SDL, `@specifiedBy` is parsed automatically:
+
+```graphql
+scalar UUID @specifiedBy(url: "https://tools.ietf.org/html/rfc4122")
+```
+
+And `SchemaPrinter` will emit the directive when printing a schema that contains a scalar with a `specifiedByURL`.
+
+## Overriding Built-in Scalars
+
+You can override built-in scalars (`String`, `Int`, `Float`, `Boolean`, `ID`) on a per-schema basis by passing a custom scalar with the same name through the `types` option.
+This works with or without a `typeLoader`:
+
+```php
+use GraphQL\Type\Definition\CustomScalarType;
+use GraphQL\Type\Definition\Type;
+use GraphQL\Type\Schema;
+
+$uppercaseString = new CustomScalarType([
+    'name' => 'String',
+    'serialize' => static fn ($value): string => strtoupper((string) $value),
+]);
+
+$schema = new Schema([
+    'query' => $queryType,
+    'typeLoader' => $myTypeLoader,
+    'types' => [$uppercaseString],
+]);
+```
+
+The custom scalar replaces the built-in one throughout the entire schema, affecting both serialization of results and coercion of inputs.
+
+> **Note:** The `typeLoader` is never called for built-in scalar names.
+> Always use `types` to override them.

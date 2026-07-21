@@ -2,8 +2,8 @@
 
 namespace GraphQL\Validator\Rules;
 
-use function array_map;
 use GraphQL\Error\Error;
+use GraphQL\Error\InvariantViolation;
 use GraphQL\Language\AST\DirectiveDefinitionNode;
 use GraphQL\Language\AST\DirectiveNode;
 use GraphQL\Language\AST\NodeKind;
@@ -15,7 +15,6 @@ use GraphQL\Utils\Utils;
 use GraphQL\Validator\QueryValidationContext;
 use GraphQL\Validator\SDLValidationContext;
 use GraphQL\Validator\ValidationContext;
-use function in_array;
 
 /**
  * Known argument names on directives.
@@ -27,9 +26,7 @@ use function in_array;
  */
 class KnownArgumentNamesOnDirectives extends ValidationRule
 {
-    /**
-     * @param array<string> $suggestedArgs
-     */
+    /** @param array<string> $suggestedArgs */
     public static function unknownDirectiveArgMessage(string $argName, string $directiveName, array $suggestedArgs): string
     {
         $message = "Unknown argument \"{$argName}\" on directive \"@{$directiveName}\".";
@@ -42,17 +39,21 @@ class KnownArgumentNamesOnDirectives extends ValidationRule
         return $message;
     }
 
+    /** @throws InvariantViolation */
     public function getSDLVisitor(SDLValidationContext $context): array
     {
         return $this->getASTVisitor($context);
     }
 
+    /** @throws InvariantViolation */
     public function getVisitor(QueryValidationContext $context): array
     {
         return $this->getASTVisitor($context);
     }
 
     /**
+     * @throws InvariantViolation
+     *
      * @phpstan-return VisitorArray
      */
     public function getASTVisitor(ValidationContext $context): array

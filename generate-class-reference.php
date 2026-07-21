@@ -2,84 +2,102 @@
 
 require __DIR__ . '/vendor/autoload.php';
 
-use GraphQL\Error\ClientAware;
-use GraphQL\Error\DebugFlag;
-use GraphQL\Error\Error;
-use GraphQL\Error\FormattedError;
-use GraphQL\Error\Warning;
-use GraphQL\Executor\ExecutionResult;
-use GraphQL\Executor\Executor;
-use GraphQL\Executor\Promise\PromiseAdapter;
-use GraphQL\GraphQL;
-use GraphQL\Language\AST\NodeKind;
-use GraphQL\Language\DirectiveLocation;
-use GraphQL\Language\Parser;
-use GraphQL\Language\Printer;
-use GraphQL\Language\Visitor;
-use GraphQL\Server\Helper;
-use GraphQL\Server\OperationParams;
-use GraphQL\Server\ServerConfig;
-use GraphQL\Server\StandardServer;
-use GraphQL\Type\Definition\ResolveInfo;
-use GraphQL\Type\Definition\Type;
-use GraphQL\Type\Schema;
-use GraphQL\Type\SchemaConfig;
-use GraphQL\Utils\AST;
-use GraphQL\Utils\BuildSchema;
-use GraphQL\Utils\SchemaPrinter;
-use GraphQL\Validator\DocumentValidator;
+use GraphQL\Utils\PhpDoc;
+use Symfony\Component\VarExporter\Exception\ExceptionInterface;
 use Symfony\Component\VarExporter\VarExporter;
 
-$outputFile = __DIR__ . '/docs/class-reference.md';
+const OUTPUT_FILE = __DIR__ . '/docs/class-reference.md';
 
-$entries = [
-    GraphQL::class => [],
-    Type::class => [],
-    ResolveInfo::class => [],
-    DirectiveLocation::class => ['constants' => true],
-    SchemaConfig::class => [],
-    Schema::class => [],
-    Parser::class => [],
-    Printer::class => [],
-    Visitor::class => [],
-    NodeKind::class => ['constants' => true],
-    Executor::class => [],
-    ExecutionResult::class => [],
-    PromiseAdapter::class => [],
-    DocumentValidator::class => [],
-    Error::class => ['constants' => true],
-    Warning::class => ['constants' => true],
-    ClientAware::class => [],
-    DebugFlag::class => ['constants' => true],
-    FormattedError::class => [],
-    StandardServer::class => [],
-    ServerConfig::class => [],
-    Helper::class => [],
-    OperationParams::class => [],
-    BuildSchema::class => [],
-    AST::class => [],
-    SchemaPrinter::class => [],
+const ENTRIES = [
+    GraphQL\GraphQL::class => [],
+    GraphQL\Type\Definition\Type::class => ['constants' => true],
+    GraphQL\Type\Definition\ResolveInfo::class => [],
+    GraphQL\Language\DirectiveLocation::class => ['constants' => true],
+    GraphQL\Type\SchemaConfig::class => [],
+    GraphQL\Type\Schema::class => [],
+    GraphQL\Language\Parser::class => [],
+    GraphQL\Language\Printer::class => [],
+    GraphQL\Language\Visitor::class => [],
+    GraphQL\Language\AST\NodeKind::class => ['constants' => true],
+    GraphQL\Executor\Executor::class => [],
+    GraphQL\Executor\ScopedContext::class => [],
+    GraphQL\Executor\ExecutionResult::class => [],
+    GraphQL\Executor\Promise\PromiseAdapter::class => [],
+    GraphQL\Deferred::class => [],
+    GraphQL\Executor\Promise\Adapter\SyncPromiseQueue::class => [],
+    GraphQL\Validator\DocumentValidator::class => [],
+    GraphQL\Error\Error::class => ['constants' => true],
+    GraphQL\Error\Warning::class => ['constants' => true],
+    GraphQL\Error\ClientAware::class => [],
+    GraphQL\Error\DebugFlag::class => ['constants' => true],
+    GraphQL\Error\FormattedError::class => [],
+    GraphQL\Server\StandardServer::class => [],
+    GraphQL\Server\ServerConfig::class => [],
+    GraphQL\Server\Helper::class => [],
+    GraphQL\Server\OperationParams::class => [],
+    GraphQL\Utils\BuildSchema::class => [],
+    GraphQL\Utils\AST::class => [],
+    GraphQL\Utils\SchemaPrinter::class => [],
 ];
 
+function wrapPhpstanTypes(?string $docs): ?string
+{
+    if ($docs === null) {
+        return null;
+    }
+
+    $lines = explode("\n", $docs);
+    $result = [];
+    $block = [];
+    $braceDepth = 0;
+
+    foreach ($lines as $line) {
+        if (str_starts_with($line, '@phpstan-') || ($block !== [] && $braceDepth > 0)) {
+            $block[] = $line;
+            $braceDepth += substr_count($line, '{') - substr_count($line, '}');
+        } else {
+            if ($block !== []) {
+                $result[] = '```php';
+                array_push($result, ...$block);
+                $result[] = '```';
+                $block = [];
+                $braceDepth = 0;
+            }
+            $result[] = $line;
+        }
+    }
+
+    if ($block !== []) {
+        $result[] = '```php';
+        array_push($result, ...$block);
+        $result[] = '```';
+    }
+
+    return implode("\n", $result);
+}
+
 /**
- * @param ReflectionClass<object>                               $class
+ * @param ReflectionClass<covariant object> $class
  * @param array{constants?: bool, props?: bool, methods?: bool} $options
+ *
+ * @throws ExceptionInterface
+ * @throws ReflectionException
  */
 function renderClass(ReflectionClass $class, array $options): string
 {
-    $classDocs = unwrapDocblock(unpadDocblock($class->getDocComment()));
+    $classDocs = wrapPhpstanTypes(PhpDoc::unwrap(PhpDoc::unpad($class->getDocComment())));
     $content = '';
     $className = $class->getName();
 
     if ($options['constants'] ?? false) {
         $constants = [];
-        foreach ($class->getConstants(/* TODO enable with PHP 8 ReflectionClassConstant::IS_PUBLIC */) as $name => $value) {
-            $constants[] = "const $name = " . VarExporter::export($value) . ';';
+        foreach ($class->getConstants(/* TODO enable with PHP 8: ReflectionClassConstant::IS_PUBLIC */) as $name => $value) {
+            $constants[] = "const {$name} = " . VarExporter::export($value) . ';';
         }
 
-        if (count($constants) > 0) {
+        if ($constants !== []) {
             $constants = "```php\n" . implode("\n", $constants) . "\n```";
-            $content .= "### $className Constants\n\n$constants\n\n";
+            $content .= "### {$className} Constants\n\n{$constants}\n\n";
         }
     }
 
@@ -91,9 +109,9 @@ function renderClass(ReflectionClass $class, array $options): string
             }
         }
 
-        if (count($props) > 0) {
+        if ($props !== []) {
             $props = "```php\n" . implode("\n\n", $props) . "\n```";
-            $content .= "### $className Props\n\n$props\n\n";
+            $content .= "### {$className} Props\n\n{$props}\n\n";
         }
     }
 
@@ -105,9 +123,9 @@ function renderClass(ReflectionClass $class, array $options): string
             }
         }
 
-        if (count($methods) > 0) {
+        if ($methods !== []) {
             $methods = implode("\n\n", $methods);
-            $content .= "### $className Methods\n\n{$methods}\n\n";
+            $content .= "### {$className} Methods\n\n{$methods}\n\n";
         }
     }
 
@@ -116,10 +134,14 @@ function renderClass(ReflectionClass $class, array $options): string
     
     {$classDocs}
     
-    $content
+    {$content}
     TEMPLATE;
 }
 
+/**
+ * @throws ExceptionInterface
+ * @throws ReflectionException
+ */
 function renderMethod(ReflectionMethod $method): string
 {
     $args = array_map(
@@ -144,64 +166,25 @@ function renderMethod(ReflectionMethod $method): string
     }
 
     $returnType = $method->getReturnType();
-    $def = "function {$method->getName()}($argsStr)";
+    $def = "function {$method->getName()}({$argsStr})";
     $def = $method->isStatic()
-        ? "static $def"
+        ? "static {$def}"
         : $def;
     $def = $returnType instanceof ReflectionType
-        ? "$def: $returnType"
+        ? "{$def}: {$returnType}"
         : $def;
-    $docBlock = unpadDocblock($method->getDocComment());
+    $docBlock = PhpDoc::unpad($method->getDocComment());
+    assert($docBlock !== null, 'isApi() guarantees a docblock exists');
+    $fence = str_contains($docBlock, '```') ? '````' : '```';
 
-    return <<<TEMPLATE
-```php
-{$docBlock}
-{$def}
-```
-TEMPLATE;
+    return "{$fence}php\n{$docBlock}\n{$def}\n{$fence}";
 }
 
 function renderProp(ReflectionProperty $prop): string
 {
     $signature = implode(' ', Reflection::getModifierNames($prop->getModifiers())) . ' $' . $prop->getName() . ';';
 
-    return unpadDocblock($prop->getDocComment()) . "\n" . $signature;
-}
-
-function unwrapDocblock(string $docBlock): string
-{
-    if ($docBlock === '') {
-        return '';
-    }
-
-    $content = preg_replace('~([\r\n]) \* (.*)~i', '$1$2', $docBlock); // strip *
-    assert(is_string($content), 'regex is statically known to be valid');
-
-    $content = preg_replace('~([\r\n])[\* ]+([\r\n])~i', '$1$2', $content); // strip single-liner *
-    assert(is_string($content), 'regex is statically known to be valid');
-
-    $content = substr($content, 3); // strip leading /**
-    $content = substr($content, 0, -2); // strip trailing */
-
-    return trim($content);
-}
-
-/**
- * @param string|false $docBlock
- */
-function unpadDocblock($docBlock): string
-{
-    if ($docBlock === false) {
-        return '';
-    }
-
-    $lines = explode("\n", $docBlock);
-    $lines = array_map(
-        static fn (string $line): string => ' ' . trim($line),
-        $lines
-    );
-
-    return trim(implode("\n", $lines));
+    return PhpDoc::unpad($prop->getDocComment()) . "\n" . $signature;
 }
 
 /**
@@ -217,9 +200,13 @@ function isApi(Reflector $reflector): bool
     return preg_match('~[\r\n ]+\* @api~', $comment) === 1;
 }
 
-file_put_contents($outputFile, '');
+file_put_contents(OUTPUT_FILE, '');
 
-foreach ($entries as $className => $options) {
+foreach (ENTRIES as $className => $options) {
     $rendered = renderClass(new ReflectionClass($className), $options);
-    file_put_contents($outputFile, $rendered, FILE_APPEND);
+    file_put_contents(OUTPUT_FILE, $rendered, FILE_APPEND);
 }
+
+$content = file_get_contents(OUTPUT_FILE);
+assert($content !== false);
+file_put_contents(OUTPUT_FILE, rtrim($content) . "\n");

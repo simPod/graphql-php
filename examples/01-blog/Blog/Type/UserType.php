@@ -2,17 +2,16 @@
 
 namespace GraphQL\Examples\Blog\Type;
 
-use Exception;
 use GraphQL\Examples\Blog\Data\DataSource;
 use GraphQL\Examples\Blog\Data\Image;
 use GraphQL\Examples\Blog\Data\Story;
 use GraphQL\Examples\Blog\Data\User;
-use GraphQL\Examples\Blog\Types;
+use GraphQL\Examples\Blog\Type\Enum\ImageSizeType;
+use GraphQL\Examples\Blog\Type\Scalar\EmailType;
+use GraphQL\Examples\Blog\TypeRegistry;
 use GraphQL\Type\Definition\NonNull;
 use GraphQL\Type\Definition\ObjectType;
-use GraphQL\Type\Definition\ResolveInfo;
-use function method_exists;
-use function ucfirst;
+use GraphQL\Type\Definition\Type;
 
 class UserType extends ObjectType
 {
@@ -22,53 +21,30 @@ class UserType extends ObjectType
             'name' => 'User',
             'description' => 'Our blog authors',
             'fields' => static fn (): array => [
-                'id' => Types::id(),
-                'email' => Types::email(),
+                'id' => Type::id(),
+                'email' => TypeRegistry::type(EmailType::class),
                 'photo' => [
-                    'type' => Types::image(),
+                    'type' => TypeRegistry::type(ImageType::class),
                     'description' => 'User photo URL',
                     'args' => [
-                        'size' => new NonNull(Types::imageSize()),
+                        'size' => new NonNull(TypeRegistry::type(ImageSizeType::class)),
                     ],
+                    'resolve' => static fn (User $user, array $args): Image => DataSource::getUserPhoto($user->id, $args['size']),
                 ],
-                'firstName' => [
-                    'type' => Types::string(),
+                'firstName' => Type::string(),
+                'lastName' => Type::string(),
+                'lastStoryPosted' => [
+                    'type' => TypeRegistry::type(StoryType::class),
+                    'resolve' => static fn (User $user): ?Story => DataSource::findLastStoryFor($user->id),
                 ],
-                'lastName' => [
-                    'type' => Types::string(),
-                ],
-                'lastStoryPosted' => Types::story(),
                 'fieldWithError' => [
-                    'type' => Types::string(),
+                    'type' => Type::string(),
                     'resolve' => static function (): void {
-                        throw new Exception('This is error field');
+                        throw new \Exception('This is error field');
                     },
                 ],
             ],
-            'interfaces' => [Types::node()],
-            'resolveField' => function ($user, $args, $context, ResolveInfo $info) {
-                $fieldName = $info->fieldName;
-
-                $method = 'resolve' . ucfirst($fieldName);
-                if (method_exists($this, $method)) {
-                    return $this->{$method}($user, $args, $context, $info);
-                }
-
-                return $user->{$fieldName};
-            },
+            'interfaces' => [TypeRegistry::type(NodeType::class)],
         ]);
-    }
-
-    /**
-     * @param array{size: string} $args
-     */
-    public function resolvePhoto(User $user, array $args): Image
-    {
-        return DataSource::getUserPhoto($user->id, $args['size']);
-    }
-
-    public function resolveLastStoryPosted(User $user): ?Story
-    {
-        return DataSource::findLastStoryFor($user->id);
     }
 }

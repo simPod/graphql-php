@@ -2,12 +2,9 @@
 
 namespace GraphQL\Utils;
 
-use function array_key_exists;
-use ArrayAccess;
-use function count;
-use Exception;
 use GraphQL\Error\Error;
 use GraphQL\Error\InvariantViolation;
+use GraphQL\Error\SerializationError;
 use GraphQL\Language\AST\BooleanValueNode;
 use GraphQL\Language\AST\DefinitionNode;
 use GraphQL\Language\AST\DocumentNode;
@@ -41,14 +38,6 @@ use GraphQL\Type\Definition\NullableType;
 use GraphQL\Type\Definition\ScalarType;
 use GraphQL\Type\Definition\Type;
 use GraphQL\Type\Schema;
-use function is_array;
-use function is_bool;
-use function is_float;
-use function is_int;
-use function is_object;
-use function is_string;
-use function property_exists;
-use Throwable;
 
 /**
  * Various utilities dealing with AST.
@@ -79,17 +68,22 @@ class AST
      * @param array<string, mixed> $node
      *
      * @api
+     *
+     * @throws \JsonException
+     * @throws InvariantViolation
      */
     public static function fromArray(array $node): Node
     {
         $kind = $node['kind'] ?? null;
         if ($kind === null) {
-            throw new InvariantViolation('Node is missing kind:' . Utils::printSafeJson($node));
+            $safeNode = Utils::printSafeJson($node);
+            throw new InvariantViolation("Node is missing kind: {$safeNode}");
         }
 
         $class = NodeKind::CLASS_MAP[$kind] ?? null;
         if ($class === null) {
-            throw new InvariantViolation('Node has unexpected kind:' . Utils::printSafeJson($node));
+            $safeNode = Utils::printSafeJson($node);
+            throw new InvariantViolation("Node has unexpected kind: {$safeNode}");
         }
 
         $instance = new $class([]);
@@ -104,11 +98,9 @@ class AST
             }
 
             if (is_array($value)) {
-                if (isset($value[0]) || count($value) === 0) {
-                    $value = new NodeList($value);
-                } else {
-                    $value = self::fromArray($value);
-                }
+                $value = isset($value[0]) || $value === []
+                    ? new NodeList($value)
+                    : self::fromArray($value);
             }
 
             $instance->{$key} = $value;
@@ -149,6 +141,10 @@ class AST
      *
      * @param mixed $value
      * @param InputType&Type $type
+     *
+     * @throws \JsonException
+     * @throws InvariantViolation
+     * @throws SerializationError
      *
      * @return (ValueNode&Node)|null
      *
@@ -196,7 +192,7 @@ class AST
         // in the PHP object according to the fields in the input type.
         if ($type instanceof InputObjectType) {
             $isArray = is_array($value);
-            $isArrayLike = $isArray || $value instanceof ArrayAccess;
+            $isArrayLike = $isArray || $value instanceof \ArrayAccess;
             if (! $isArrayLike && ! is_object($value)) {
                 return null;
             }
@@ -204,11 +200,9 @@ class AST
             $fields = $type->getFields();
             $fieldNodes = [];
             foreach ($fields as $fieldName => $field) {
-                if ($isArrayLike) {
-                    $fieldValue = $value[$fieldName] ?? null;
-                } else {
-                    $fieldValue = $value->{$fieldName} ?? null;
-                }
+                $fieldValue = $isArrayLike
+                    ? $value[$fieldName] ?? null
+                    : $value->{$fieldName} ?? null;
 
                 // Have to check additionally if key exists, since we differentiate between
                 // "no key" and "value is null":
@@ -257,7 +251,7 @@ class AST
         }
 
         if (is_float($serialized)) {
-            // int cast with == used for performance reasons
+            /** @phpstan-ignore equal.notAllowed (int cast with == used for performance reasons) */
             if ((int) $serialized == $serialized) {
                 return new IntValueNode(['value' => (string) $serialized]);
             }
@@ -282,7 +276,8 @@ class AST
             return new StringValueNode(['value' => $serialized]);
         }
 
-        throw new InvariantViolation('Cannot convert value to AST: ' . Utils::printSafe($serialized));
+        $notConvertible = Utils::printSafe($serialized);
+        throw new InvariantViolation("Cannot convert value to AST: {$notConvertible}");
     }
 
     /**
@@ -307,13 +302,13 @@ class AST
      * @param (ValueNode&Node)|null $valueNode
      * @param array<string, mixed>|null $variables
      *
-     * @throws Exception
+     * @throws \Exception
      *
      * @return mixed
      *
      * @api
      */
-    public static function valueFromAST(?ValueNode $valueNode, Type $type, ?array $variables = null)
+    public static function valueFromAST(?ValueNode $valueNode, Type $type, ?array $variables = null, ?Schema $schema = null)
     {
         $undefined = Utils::undefined();
 
@@ -329,7 +324,7 @@ class AST
                 return $undefined;
             }
 
-            return self::valueFromAST($valueNode, $type->getWrappedType(), $variables);
+            return self::valueFromAST($valueNode, $type->getWrappedType(), $variables, $schema);
         }
 
         if ($valueNode instanceof NullValueNode) {
@@ -368,7 +363,7 @@ class AST
 
                         $coercedValues[] = null;
                     } else {
-                        $itemValue = self::valueFromAST($itemNode, $itemType, $variables);
+                        $itemValue = self::valueFromAST($itemNode, $itemType, $variables, $schema);
                         if ($undefined === $itemValue) {
                             // Invalid: intentionally return no value.
                             return $undefined;
@@ -381,7 +376,7 @@ class AST
                 return $coercedValues;
             }
 
-            $coercedValue = self::valueFromAST($valueNode, $itemType, $variables);
+            $coercedValue = self::valueFromAST($valueNode, $itemType, $variables, $schema);
             if ($undefined === $coercedValue) {
                 // Invalid: intentionally return no value.
                 return $undefined;
@@ -422,7 +417,8 @@ class AST
                 $fieldValue = self::valueFromAST(
                     $fieldNode->value,
                     $field->getType(),
-                    $variables
+                    $variables,
+                    $schema,
                 );
 
                 if ($undefined === $fieldValue) {
@@ -433,25 +429,35 @@ class AST
                 $coercedObj[$fieldName] = $fieldValue;
             }
 
-            return $coercedObj;
+            return $type->parseValue($coercedObj);
         }
 
         if ($type instanceof EnumType) {
             try {
                 return $type->parseLiteral($valueNode, $variables);
-            } catch (Throwable $error) {
+            } catch (\Throwable $error) {
                 return $undefined;
             }
         }
 
         assert($type instanceof ScalarType, 'only remaining option');
+        $typeName = $type->name;
+
+        // Account for type loader returning a different scalar instance than
+        // the built-in singleton used in field definitions. Resolve the actual
+        // type from the schema to ensure the correct parseLiteral() is called.
+        if ($schema !== null && Type::isBuiltInScalarName($typeName)) {
+            $schemaType = $schema->getType($typeName);
+            assert($schemaType instanceof ScalarType, "Schema must provide a ScalarType for built-in scalar \"{$typeName}\".");
+            $type = $schemaType;
+        }
 
         // Scalars fulfill parsing a literal value via parseLiteral().
         // Invalid values represent a failure to parse correctly, in which case
         // no value is returned.
         try {
             return $type->parseLiteral($valueNode, $variables);
-        } catch (Throwable $error) {
+        } catch (\Throwable $error) {
             return $undefined;
         }
     }
@@ -487,7 +493,7 @@ class AST
      *
      * @param array<string, mixed>|null $variables
      *
-     * @throws Exception
+     * @throws \Exception
      *
      * @return mixed
      *
@@ -534,22 +540,23 @@ class AST
                     : null;
         }
 
-        throw new Error('Unexpected value kind: ' . $valueNode->kind . '.');
+        throw new Error("Unexpected value kind: {$valueNode->kind}");
     }
 
     /**
      * Returns type definition for given AST Type node.
      *
+     * @param callable(string): ?Type $typeLoader
      * @param NamedTypeNode|ListTypeNode|NonNullTypeNode $inputTypeNode
      *
-     * @throws Exception
+     * @throws \Exception
      *
      * @api
      */
-    public static function typeFromAST(Schema $schema, Node $inputTypeNode): ?Type
+    public static function typeFromAST(callable $typeLoader, Node $inputTypeNode): ?Type
     {
         if ($inputTypeNode instanceof ListTypeNode) {
-            $innerType = self::typeFromAST($schema, $inputTypeNode->type);
+            $innerType = self::typeFromAST($typeLoader, $inputTypeNode->type);
 
             return $innerType === null
                 ? null
@@ -557,7 +564,7 @@ class AST
         }
 
         if ($inputTypeNode instanceof NonNullTypeNode) {
-            $innerType = self::typeFromAST($schema, $inputTypeNode->type);
+            $innerType = self::typeFromAST($typeLoader, $inputTypeNode->type);
             if ($innerType === null) {
                 return null;
             }
@@ -567,7 +574,7 @@ class AST
             return new NonNull($innerType);
         }
 
-        return $schema->getType($inputTypeNode->name->value);
+        return $typeLoader($inputTypeNode->name->value);
     }
 
     /**

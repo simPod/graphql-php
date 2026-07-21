@@ -2,31 +2,24 @@
 
 namespace GraphQL\Language;
 
-use function chr;
 use GraphQL\Error\SyntaxError;
 use GraphQL\Utils\Utils;
-use function hexdec;
-use function mb_convert_encoding;
-use function ord;
-use function pack;
-use function preg_match;
-use function substr;
 
 /**
- * A Lexer is a stateful stream generator in that every time
- * it is advanced, it returns the next token in the Source. Assuming the
- * source lexes, the final Token emitted by the lexer will be of kind
- * EOF, after which the lexer will repeatedly return the same EOF token
- * whenever called.
+ * A lexer is a stateful stream generator, it returns the next token in the Source when advanced.
+ * Assuming the source is valid, the final returned token will be EOF,
+ * after which the lexer will repeatedly return the same EOF token whenever called.
  *
  * Algorithm is O(N) both on memory and time.
  *
  * @phpstan-import-type ParserOptions from Parser
+ *
+ * @see \GraphQL\Tests\Language\LexerTest
  */
 class Lexer
 {
+    // https://spec.graphql.org/October2021/#sec-Punctuators
     private const TOKEN_BANG = 33;
-    private const TOKEN_HASH = 35;
     private const TOKEN_DOLLAR = 36;
     private const TOKEN_AMP = 38;
     private const TOKEN_PAREN_L = 40;
@@ -46,52 +39,39 @@ class Lexer
     /** @phpstan-var ParserOptions */
     public array $options;
 
-    /**
-     * The previously focused non-ignored token.
-     */
+    /** The previously focused non-ignored token. */
     public Token $lastToken;
 
-    /**
-     * The currently focused non-ignored token.
-     */
+    /** The currently focused non-ignored token. */
     public Token $token;
 
-    /**
-     * The (1-indexed) line containing the current token.
-     */
-    public int $line;
+    /** The (1-indexed) line containing the current token. */
+    public int $line = 1;
 
-    /**
-     * The character offset at which the current line begins.
-     */
-    public int $lineStart;
+    /** The character offset at which the current line begins. */
+    public int $lineStart = 0;
 
-    /**
-     * Current cursor position for UTF8 encoding of the source.
-     */
-    private int $position;
+    /** Current cursor position for UTF8 encoding of the source. */
+    private int $position = 0;
 
-    /**
-     * Current cursor position for ASCII representation of the source.
-     */
-    private int $byteStreamPosition;
+    /** Current cursor position for ASCII representation of the source. */
+    private int $byteStreamPosition = 0;
 
-    /**
-     * @phpstan-param ParserOptions        $options
-     */
+    /** @phpstan-param ParserOptions $options */
     public function __construct(Source $source, array $options = [])
     {
-        $startOfFileToken = new Token(Token::SOF, 0, 0, 0, 0, null);
+        $startOfFileToken = new Token(Token::SOF, 0, 0, 0, 0);
 
         $this->source = $source;
         $this->options = $options;
         $this->lastToken = $startOfFileToken;
         $this->token = $startOfFileToken;
-        $this->line = 1;
-        $this->lineStart = 0;
-        $this->position = $this->byteStreamPosition = 0;
     }
 
+    /**
+     * @throws \JsonException
+     * @throws SyntaxError
+     */
     public function advance(): Token
     {
         $this->lastToken = $this->token;
@@ -99,6 +79,10 @@ class Lexer
         return $this->token = $this->lookahead();
     }
 
+    /**
+     * @throws \JsonException
+     * @throws SyntaxError
+     */
     public function lookahead(): Token
     {
         $token = $this->token;
@@ -112,6 +96,7 @@ class Lexer
     }
 
     /**
+     * @throws \JsonException
      * @throws SyntaxError
      */
     private function readToken(Token $prev): Token
@@ -132,19 +117,19 @@ class Lexer
         [, $code, $bytes] = $this->readChar(true);
 
         switch ($code) {
-            case self::TOKEN_BANG:
+            case self::TOKEN_BANG: // !
                 return new Token(Token::BANG, $position, $position + 1, $line, $col, $prev);
-            case self::TOKEN_HASH: // #
+            case 35: // #
                 $this->moveStringCursor(-1, -1 * $bytes);
 
                 return $this->readComment($line, $col, $prev);
-            case self::TOKEN_DOLLAR:
+            case self::TOKEN_DOLLAR: // $
                 return new Token(Token::DOLLAR, $position, $position + 1, $line, $col, $prev);
-            case self::TOKEN_AMP:
+            case self::TOKEN_AMP: // &
                 return new Token(Token::AMP, $position, $position + 1, $line, $col, $prev);
-            case self::TOKEN_PAREN_L:
+            case self::TOKEN_PAREN_L: // (
                 return new Token(Token::PAREN_L, $position, $position + 1, $line, $col, $prev);
-            case self::TOKEN_PAREN_R:
+            case self::TOKEN_PAREN_R: // )
                 return new Token(Token::PAREN_R, $position, $position + 1, $line, $col, $prev);
             case self::TOKEN_DOT: // .
                 [, $charCode1] = $this->readChar(true);
@@ -155,23 +140,23 @@ class Lexer
                 }
 
                 break;
-            case self::TOKEN_COLON:
+            case self::TOKEN_COLON: // :
                 return new Token(Token::COLON, $position, $position + 1, $line, $col, $prev);
-            case self::TOKEN_EQUALS:
+            case self::TOKEN_EQUALS: // =
                 return new Token(Token::EQUALS, $position, $position + 1, $line, $col, $prev);
-            case self::TOKEN_AT:
+            case self::TOKEN_AT: // @
                 return new Token(Token::AT, $position, $position + 1, $line, $col, $prev);
-            case self::TOKEN_BRACKET_L:
+            case self::TOKEN_BRACKET_L: // [
                 return new Token(Token::BRACKET_L, $position, $position + 1, $line, $col, $prev);
-            case self::TOKEN_BRACKET_R:
+            case self::TOKEN_BRACKET_R: // ]
                 return new Token(Token::BRACKET_R, $position, $position + 1, $line, $col, $prev);
-            case self::TOKEN_BRACE_L:
+            case self::TOKEN_BRACE_L: // {
                 return new Token(Token::BRACE_L, $position, $position + 1, $line, $col, $prev);
-            case self::TOKEN_PIPE:
+            case self::TOKEN_PIPE: // |
                 return new Token(Token::PIPE, $position, $position + 1, $line, $col, $prev);
-            case self::TOKEN_BRACE_R:
+            case self::TOKEN_BRACE_R: // }
                 return new Token(Token::BRACE_R, $position, $position + 1, $line, $col, $prev);
-            // A-Z
+                // A-Z
             case 65:
             case 66:
             case 67:
@@ -198,9 +183,9 @@ class Lexer
             case 88:
             case 89:
             case 90:
-            // _
+                // _
             case 95:
-            // a-z
+                // a-z
             case 97:
             case 98:
             case 99:
@@ -229,9 +214,9 @@ class Lexer
             case 122:
                 return $this->moveStringCursor(-1, -1 * $bytes)
                     ->readName($line, $col, $prev);
-            // -
+                // -
             case 45:
-            // 0-9
+                // 0-9
             case 48:
             case 49:
             case 50:
@@ -244,7 +229,7 @@ class Lexer
             case 57:
                 return $this->moveStringCursor(-1, -1 * $bytes)
                     ->readNumber($line, $col, $prev);
-            // "
+                // "
             case 34:
                 [, $nextCode] = $this->readChar();
                 [, $nextNextCode] = $this->moveStringCursor(1, 1)
@@ -259,13 +244,10 @@ class Lexer
                     ->readString($line, $col, $prev);
         }
 
-        throw new SyntaxError(
-            $this->source,
-            $position,
-            $this->unexpectedCharacterMessage($code)
-        );
+        throw new SyntaxError($this->source, $position, $this->unexpectedCharacterMessage($code));
     }
 
+    /** @throws \JsonException */
     private function unexpectedCharacterMessage(?int $code): string
     {
         // SourceCharacter
@@ -287,21 +269,11 @@ class Lexer
      */
     private function readName(int $line, int $col, Token $prev): Token
     {
-        $value = '';
         $start = $this->position;
-        [$char, $code] = $this->readChar();
-
-        while (
-            $code !== null && (
-                $code === 95 // _
-                || ($code >= 48 && $code <= 57) // 0-9
-                || ($code >= 65 && $code <= 90) // A-Z
-                || ($code >= 97 && $code <= 122) // a-z
-            )
-        ) {
-            $value .= $char;
-            [$char, $code] = $this->moveStringCursor(1, 1)->readChar();
-        }
+        $body = $this->source->body;
+        $length = strspn($body, 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_', $this->byteStreamPosition);
+        $value = substr($body, $this->byteStreamPosition, $length);
+        $this->moveStringCursor($length, $length);
 
         return new Token(
             Token::NAME,
@@ -321,6 +293,7 @@ class Lexer
      * Int:   -?(0|[1-9][0-9]*)
      * Float: -?(0|[1-9][0-9]*)(\.[0-9]+)?((E|e)(+|-)?[0-9]+)?
      *
+     * @throws \JsonException
      * @throws SyntaxError
      */
     private function readNumber(int $line, int $col, Token $prev): Token
@@ -342,11 +315,7 @@ class Lexer
             [$char, $code] = $this->moveStringCursor(1, 1)->readChar();
 
             if ($code >= 48 && $code <= 57) {
-                throw new SyntaxError(
-                    $this->source,
-                    $this->position,
-                    'Invalid number, unexpected digit after 0: ' . Utils::printCharCode($code)
-                );
+                throw new SyntaxError($this->source, $this->position, 'Invalid number, unexpected digit after 0: ' . Utils::printCharCode($code));
             }
         } else {
             $value .= $this->readDigits();
@@ -388,6 +357,9 @@ class Lexer
 
     /**
      * Returns string with all digits + changes current string cursor position to point to the first char after digits.
+     *
+     * @throws \JsonException
+     * @throws SyntaxError
      */
     private function readDigits(): string
     {
@@ -408,14 +380,11 @@ class Lexer
             $code = null;
         }
 
-        throw new SyntaxError(
-            $this->source,
-            $this->position,
-            'Invalid number, expected digit but got: ' . Utils::printCharCode($code)
-        );
+        throw new SyntaxError($this->source, $this->position, 'Invalid number, expected digit but got: ' . Utils::printCharCode($code));
     }
 
     /**
+     * @throws \JsonException
      * @throws SyntaxError
      */
     private function readString(int $line, int $col, Token $prev): Token
@@ -423,18 +392,14 @@ class Lexer
         $start = $this->position;
 
         // Skip leading quote and read first string char:
-        [$char, $code, $bytes] = $this->moveStringCursor(1, 1)->readChar();
+        [$char, $code, $bytes] = $this->moveStringCursor(1, 1)
+            ->readChar();
 
         $chunk = '';
         $value = '';
 
-        while (
-            $code !== null
-            // not LineTerminator
-            && $code !== 10 && $code !== 13
-        ) {
-            // Closing Quote (")
-            if ($code === 34) {
+        while (! in_array($code, [null, 10, 13], true)) { // not LineTerminator
+            if ($code === 34) { // Closing Quote (")
                 $value .= $chunk;
 
                 // Skip quote
@@ -469,8 +434,8 @@ class Lexer
                         $value .= '\\';
                         break;
                     case 98:
-                        $value .= chr(8);
-                        break; // \b (backspace)
+                        $value .= chr(8); // \b (backspace)
+                        break;
                     case 102:
                         $value .= "\f";
                         break;
@@ -485,13 +450,9 @@ class Lexer
                         break;
                     case 117:
                         $position = $this->position;
-                        [$hex] = $this->readChars(4, true);
+                        [$hex] = $this->readChars(4);
                         if (preg_match('/[0-9a-fA-F]{4}/', $hex) !== 1) {
-                            throw new SyntaxError(
-                                $this->source,
-                                $position - 1,
-                                'Invalid character escape sequence: \\u' . $hex
-                            );
+                            throw new SyntaxError($this->source, $position - 1, "Invalid character escape sequence: \\u{$hex}");
                         }
 
                         $code = hexdec($hex);
@@ -500,13 +461,9 @@ class Lexer
                         // UTF-16 surrogate pair detection and handling.
                         $highOrderByte = $code >> 8;
                         if ($highOrderByte >= 0xD8 && $highOrderByte <= 0xDF) {
-                            [$utf16Continuation] = $this->readChars(6, true);
+                            [$utf16Continuation] = $this->readChars(6);
                             if (preg_match('/^\\\u[0-9a-fA-F]{4}$/', $utf16Continuation) !== 1) {
-                                throw new SyntaxError(
-                                    $this->source,
-                                    $this->position - 5,
-                                    'Invalid UTF-16 trailing surrogate: ' . $utf16Continuation
-                                );
+                                throw new SyntaxError($this->source, $this->position - 5, 'Invalid UTF-16 trailing surrogate: ' . $utf16Continuation);
                             }
 
                             $surrogatePairHex = $hex . substr($utf16Continuation, 2, 4);
@@ -518,15 +475,12 @@ class Lexer
 
                         $value .= Utils::chr($code);
                         break;
-                    // null means EOF, will delegate to general handling of unterminated strings
+                        // null means EOF, will delegate to general handling of unterminated strings
                     case null:
                         continue 2;
                     default:
-                        throw new SyntaxError(
-                            $this->source,
-                            $this->position - 1,
-                            'Invalid character escape sequence: \\' . Utils::chr($code)
-                        );
+                        $chr = Utils::chr($code);
+                        throw new SyntaxError($this->source, $this->position - 1, "Invalid character escape sequence: \\{$chr}");
                 }
 
                 $chunk = '';
@@ -537,17 +491,16 @@ class Lexer
             [$char, $code, $bytes] = $this->readChar();
         }
 
-        throw new SyntaxError(
-            $this->source,
-            $this->position,
-            'Unterminated string.'
-        );
+        throw new SyntaxError($this->source, $this->position, 'Unterminated string.');
     }
 
     /**
      * Reads a block string token from the source file.
      *
      * """("?"?(\\"""|\\(?!=""")|[^"\\]))*"""
+     *
+     * @throws \JsonException
+     * @throws SyntaxError
      */
     private function readBlockString(int $line, int $col, Token $prev): Token
     {
@@ -578,7 +531,7 @@ class Lexer
                         $line,
                         $col,
                         $prev,
-                        BlockString::dedentValue($value)
+                        BlockString::dedentBlockStringLines($value)
                     );
                 }
 
@@ -604,41 +557,46 @@ class Lexer
                 $value .= $chunk . '"""';
                 $chunk = '';
             } else {
+                // move cursor back to before the first quote
                 $this->moveStringCursor(-2, -2);
+
+                if ($code === 10) { // new line
+                    ++$this->line;
+                    $this->lineStart = $this->position;
+                }
+
                 $chunk .= $char;
             }
 
             [$char, $code, $bytes] = $this->readChar();
         }
 
-        throw new SyntaxError(
-            $this->source,
-            $this->position,
-            'Unterminated string.'
-        );
+        throw new SyntaxError($this->source, $this->position, 'Unterminated string.');
     }
 
+    /**
+     * @throws \JsonException
+     * @throws SyntaxError
+     */
     private function assertValidStringCharacterCode(int $code, int $position): void
     {
         // SourceCharacter
         if ($code < 0x0020 && $code !== 0x0009) {
-            throw new SyntaxError(
-                $this->source,
-                $position,
-                'Invalid character within String: ' . Utils::printCharCode($code)
-            );
+            $char = Utils::printCharCode($code);
+            throw new SyntaxError($this->source, $position, "Invalid character within String: {$char}");
         }
     }
 
+    /**
+     * @throws \JsonException
+     * @throws SyntaxError
+     */
     private function assertValidBlockStringCharacterCode(int $code, int $position): void
     {
         // SourceCharacter
         if ($code < 0x0020 && $code !== 0x0009 && $code !== 0x000A && $code !== 0x000D) {
-            throw new SyntaxError(
-                $this->source,
-                $position,
-                'Invalid character within String: ' . Utils::printCharCode($code)
-            );
+            $char = Utils::printCharCode($code);
+            throw new SyntaxError($this->source, $position, "Invalid character within String: {$char}");
         }
     }
 
@@ -653,7 +611,7 @@ class Lexer
 
             // Skip whitespace
             // tab | space | comma | BOM
-            if ($code === 9 || $code === 32 || $code === 44 || $code === 0xFEFF) {
+            if (in_array($code, [9, 32, 44, 0xFEFF], true)) {
                 $this->moveStringCursor(1, $bytes);
             } elseif ($code === 10) { // new line
                 $this->moveStringCursor(1, $bytes);
@@ -734,7 +692,6 @@ class Lexer
                 $bytes = 4;
             }
 
-            $utf8char = '';
             for ($pos = $byteStreamPosition; $pos < $byteStreamPosition + $bytes; ++$pos) {
                 $utf8char .= $this->source->body[$pos];
             }
@@ -757,7 +714,7 @@ class Lexer
      *
      * @return array{string, int}
      */
-    private function readChars(int $charCount, bool $advance): array
+    private function readChars(int $charCount): array
     {
         $result = '';
         $totalBytes = 0;
@@ -770,16 +727,12 @@ class Lexer
             $result .= $char;
         }
 
-        if ($advance) {
-            $this->moveStringCursor($charCount, $totalBytes);
-        }
+        $this->moveStringCursor($charCount, $totalBytes);
 
         return [$result, $totalBytes];
     }
 
-    /**
-     * Moves internal string cursor position.
-     */
+    /** Moves internal string cursor position. */
     private function moveStringCursor(int $positionOffset, int $byteStreamOffset): self
     {
         $this->position += $positionOffset;

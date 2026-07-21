@@ -2,11 +2,8 @@
 
 namespace GraphQL\Language\AST;
 
-use function count;
-use function get_object_vars;
+use GraphQL\Error\InvariantViolation;
 use GraphQL\Utils\Utils;
-use function json_encode;
-use JsonSerializable;
 
 /**
  * type Node = NameNode
@@ -31,27 +28,26 @@ use JsonSerializable;
  * | DirectiveNode
  * | ListTypeNode
  * | NonNullTypeNode.
+ *
+ * @see \GraphQL\Tests\Language\AST\NodeTest
  */
-abstract class Node implements JsonSerializable
+abstract class Node implements \JsonSerializable
 {
     public ?Location $loc = null;
 
     public string $kind;
 
-    /**
-     * @param array<string, mixed> $vars
-     */
+    /** @param array<string, mixed> $vars */
     public function __construct(array $vars)
     {
-        if (count($vars) === 0) {
-            return;
-        }
-
         Utils::assign($this, $vars);
     }
 
     /**
      * Returns a clone of this instance and all its children, except Location $loc.
+     *
+     * @throws \JsonException
+     * @throws InvariantViolation
      *
      * @return static
      */
@@ -66,6 +62,9 @@ abstract class Node implements JsonSerializable
      *
      * @phpstan-param TCloneable $value
      *
+     * @throws \JsonException
+     * @throws InvariantViolation
+     *
      * @phpstan-return TCloneable
      */
     protected static function cloneValue($value)
@@ -73,19 +72,25 @@ abstract class Node implements JsonSerializable
         if ($value instanceof self) {
             $cloned = clone $value;
             foreach (get_object_vars($cloned) as $prop => $propValue) {
-                $cloned->{$prop} = static::cloneValue($propValue);
+                $cloned->{$prop} = static::cloneValue($propValue); // @phpstan-ignore argument.templateType
             }
 
             return $cloned;
         }
 
         if ($value instanceof NodeList) {
+            /**
+             * @phpstan-var TCloneable
+             *
+             * @phpstan-ignore varTag.nativeType (PHPStan is strict about template types and sees NodeList<TNode> as potentially different from TCloneable)
+             */
             return $value->cloneDeep();
         }
 
         return $value;
     }
 
+    /** @throws \JsonException */
     public function __toString(): string
     {
         return json_encode($this, JSON_THROW_ON_ERROR);
@@ -103,17 +108,13 @@ abstract class Node implements JsonSerializable
         return $this->toArray();
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function toArray(): array
     {
         return self::recursiveToArray($this);
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     private static function recursiveToArray(Node $node): array
     {
         $result = [];

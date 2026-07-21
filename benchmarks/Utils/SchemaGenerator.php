@@ -2,17 +2,13 @@
 
 namespace GraphQL\Benchmarks\Utils;
 
-use function array_merge;
-use function array_rand;
-use Exception;
-use function explode;
 use GraphQL\Type\Definition\EnumType;
 use GraphQL\Type\Definition\InputObjectType;
 use GraphQL\Type\Definition\ObjectType;
 use GraphQL\Type\Definition\ResolveInfo;
 use GraphQL\Type\Definition\Type;
 use GraphQL\Type\Schema;
-use function ucfirst;
+use GraphQL\Type\SchemaConfig;
 
 class SchemaGenerator
 {
@@ -29,9 +25,7 @@ class SchemaGenerator
     /** @var array<string, ObjectType> */
     private array $objectTypes = [];
 
-    /**
-     * @param array<string, int> $config
-     */
+    /** @param array<string, int> $config */
     public function __construct(array $config)
     {
         $this->config = array_merge($this->config, $config);
@@ -39,9 +33,10 @@ class SchemaGenerator
 
     public function buildSchema(): Schema
     {
-        return new Schema([
-            'query' => $this->buildQueryType(),
-        ]);
+        return new Schema(
+            (new SchemaConfig())
+                ->setQuery($this->buildQueryType())
+        );
     }
 
     public function buildQueryType(): ObjectType
@@ -63,15 +58,12 @@ class SchemaGenerator
     protected function createType(int $nestingLevel, ?string $typeName = null): ObjectType
     {
         if ($this->typeIndex > $this->config['totalTypes']) {
-            throw new Exception(
-                'Cannot create new type: there are already ' . $this->typeIndex . ' '
-                . 'which exceeds allowed number of ' . $this->config['totalTypes'] . ' types total'
-            );
+            throw new \Exception("Cannot create new type: there are already {$this->typeIndex} types which exceeds allowed number of {$this->config['totalTypes']} types total");
         }
 
         ++$this->typeIndex;
         if ($typeName === null) {
-            $typeName = 'Level_' . $nestingLevel . '_Type' . $this->typeIndex;
+            $typeName = "Level_{$nestingLevel}_Type{$this->typeIndex}";
         }
 
         $type = new ObjectType([
@@ -84,28 +76,24 @@ class SchemaGenerator
         return $type;
     }
 
-    /**
-     * @return array{0: Type, 1: string}
-     */
+    /** @return array{0: Type, 1: string} */
     protected function getFieldTypeAndName(int $nestingLevel, int $fieldIndex): array
     {
         if ($nestingLevel >= $this->config['nestingLevel']) {
             $fieldType = Type::string();
-            $fieldName = 'leafField' . $fieldIndex;
+            $fieldName = "leafField{$fieldIndex}";
         } elseif ($this->typeIndex >= $this->config['totalTypes']) {
             $fieldType = $this->objectTypes[array_rand($this->objectTypes)];
-            $fieldName = 'randomTypeField' . $fieldIndex;
+            $fieldName = "randomTypeField{$fieldIndex}";
         } else {
             $fieldType = $this->createType($nestingLevel);
-            $fieldName = 'field' . $fieldIndex;
+            $fieldName = "field{$fieldIndex}";
         }
 
         return [$fieldType, $fieldName];
     }
 
-    /**
-     * @return array<int, array<string, mixed>>
-     */
+    /** @return array<int, array<string, mixed>> */
     protected function createTypeFields(string $typeName, int $nestingLevel): array
     {
         $fields = [];
@@ -139,9 +127,7 @@ class SchemaGenerator
         return $fields;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     protected function createFieldArgs(string $fieldName, string $typeName): array
     {
         return [
@@ -150,7 +136,7 @@ class SchemaGenerator
             ],
             'argEnum' => [
                 'type' => new EnumType([
-                    'name' => $typeName . $fieldName . 'Enum',
+                    'name' => "{$typeName}{$fieldName}Enum",
                     'values' => [
                         'ONE',
                         'TWO',
@@ -160,7 +146,7 @@ class SchemaGenerator
             ],
             'argInputObject' => [
                 'type' => new InputObjectType([
-                    'name' => $typeName . $fieldName . 'Input',
+                    'name' => "{$typeName}{$fieldName}Input",
                     'fields' => [
                         'field1' => Type::string(),
                         'field2' => Type::int(),
@@ -171,12 +157,12 @@ class SchemaGenerator
     }
 
     /**
-     * @param mixed                $root
+     * @param mixed $root
      * @param array<string, mixed> $args
-     * @param mixed                $context
+     * @param mixed $context
      */
     public function resolveField($root, array $args, $context, ResolveInfo $resolveInfo): string
     {
-        return $resolveInfo->fieldName . '-value';
+        return "{$resolveInfo->fieldName}-value";
     }
 }

@@ -2,12 +2,6 @@
 
 namespace GraphQL\Language;
 
-use function json_decode;
-use function mb_strlen;
-use function mb_substr;
-use function preg_match_all;
-use const PREG_OFFSET_CAPTURE;
-
 class Source
 {
     public string $body;
@@ -45,7 +39,7 @@ class Source
         $utfChars = json_decode('"\u2028\u2029"');
         $lineRegexp = '/\r\n|[\n\r' . $utfChars . ']/su';
         $matches = [];
-        preg_match_all($lineRegexp, mb_substr($this->body, 0, $position, 'UTF-8'), $matches, PREG_OFFSET_CAPTURE);
+        preg_match_all($lineRegexp, mb_substr($this->body, 0, $position, 'UTF-8'), $matches, \PREG_OFFSET_CAPTURE);
 
         foreach ($matches[0] as $match) {
             ++$line;

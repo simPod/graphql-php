@@ -12,11 +12,11 @@ use GraphQL\Validator\ValidationContext;
 
 final class CustomRuleTest extends ValidatorTestCase
 {
-    private const CUSTOM_VALIDATION_RULE_ERROR = 'This is the error we are looking for!';
+    private const CUSTOM_VALIDATION_RULE_ERROR = 'This is the error we are looking for';
 
     public function testAddRuleCanReplaceDefaultRules(): void
     {
-        DocumentValidator::addRule(new class() extends ExecutableDefinitions {
+        DocumentValidator::addRule(new class extends ExecutableDefinitions {
             public function getName(): string
             {
                 return ExecutableDefinitions::class;

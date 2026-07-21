@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * @see https://github.com/webonyx/graphql-php/issues/467
  */
-class Issue467Test extends TestCase
+final class Issue467Test extends TestCase
 {
     public function testInputObjectValidation(): void
     {
@@ -36,8 +36,8 @@ query echo ($msg: MsgInput) {
         $schema = BuildSchema::build($schemaStr);
         $result = GraphQL::executeQuery($schema, $query, null, null, $variables);
 
-        $expectedError = 'Variable "$msg" got invalid value ["my message"]; Field "0" is not defined by type MsgInput.';
+        $expectedError = 'Variable "$msg" got invalid value ["my message"]; Field "0" is not defined by type "MsgInput".';
         self::assertCount(1, $result->errors);
-        self::assertEquals($expectedError, $result->errors[0]->getMessage());
+        self::assertSame($expectedError, $result->errors[0]->getMessage());
     }
 }

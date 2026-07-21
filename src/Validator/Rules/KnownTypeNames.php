@@ -2,8 +2,6 @@
 
 namespace GraphQL\Validator\Rules;
 
-use function array_keys;
-use function count;
 use GraphQL\Error\Error;
 use GraphQL\Language\AST\NamedTypeNode;
 use GraphQL\Language\AST\NodeKind;
@@ -15,7 +13,6 @@ use GraphQL\Utils\Utils;
 use GraphQL\Validator\QueryValidationContext;
 use GraphQL\Validator\SDLValidationContext;
 use GraphQL\Validator\ValidationContext;
-use function in_array;
 
 /**
  * Known type names.
@@ -37,23 +34,19 @@ class KnownTypeNames extends ValidationRule
         return $this->getASTVisitor($context);
     }
 
-    /**
-     * @phpstan-return VisitorArray
-     */
+    /** @phpstan-return VisitorArray */
     public function getASTVisitor(ValidationContext $context): array
     {
         /** @var array<int, string> $definedTypes */
         $definedTypes = [];
         foreach ($context->getDocument()->definitions as $def) {
             if ($def instanceof TypeDefinitionNode) {
-                $definedTypes[] = $def->name->value;
+                $definedTypes[] = $def->getName()->value;
             }
         }
 
-        $standardTypeNames = array_keys(Type::getAllBuiltInTypes());
-
         return [
-            NodeKind::NAMED_TYPE => static function (NamedTypeNode $node, $_1, $parent, $_2, $ancestors) use ($context, $definedTypes, $standardTypeNames): void {
+            NodeKind::NAMED_TYPE => static function (NamedTypeNode $node, $_1, $parent, $_2, $ancestors) use ($context, $definedTypes): void {
                 $typeName = $node->name->value;
                 $schema = $context->getSchema();
 
@@ -67,7 +60,7 @@ class KnownTypeNames extends ValidationRule
 
                 $definitionNode = $ancestors[2] ?? $parent;
                 $isSDL = $definitionNode instanceof TypeSystemDefinitionNode || $definitionNode instanceof TypeSystemExtensionNode;
-                if ($isSDL && in_array($typeName, $standardTypeNames, true)) {
+                if ($isSDL && in_array($typeName, Type::BUILT_IN_TYPE_NAMES, true)) {
                     return;
                 }
 
@@ -84,7 +77,7 @@ class KnownTypeNames extends ValidationRule
                         Utils::suggestionList(
                             $typeName,
                             $isSDL
-                                ? [...$standardTypeNames, ...$typeNames]
+                                ? [...Type::BUILT_IN_TYPE_NAMES, ...$typeNames]
                                 : $typeNames
                         )
                     ),
@@ -94,14 +87,14 @@ class KnownTypeNames extends ValidationRule
         ];
     }
 
-    /**
-     * @param array<string> $suggestedTypes
-     */
+    /** @param array<string> $suggestedTypes */
     public static function unknownTypeMessage(string $type, array $suggestedTypes): string
     {
-        $message = 'Unknown type "' . $type . '".';
-        if (count($suggestedTypes) > 0) {
-            $message .= ' Did you mean ' . Utils::quotedOrList($suggestedTypes) . '?';
+        $message = "Unknown type \"{$type}\".";
+
+        if ($suggestedTypes !== []) {
+            $suggestionList = Utils::quotedOrList($suggestedTypes);
+            $message .= " Did you mean {$suggestionList}?";
         }
 
         return $message;

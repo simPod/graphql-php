@@ -4,6 +4,7 @@ namespace GraphQL\Tests\Executor;
 
 use DMS\PHPUnitExtensions\ArraySubset\ArraySubsetAsserts;
 use GraphQL\Error\DebugFlag;
+use GraphQL\Error\Error;
 use GraphQL\Error\InvariantViolation;
 use GraphQL\Executor\ExecutionResult;
 use GraphQL\Executor\Executor;
@@ -12,6 +13,7 @@ use GraphQL\Language\Parser;
 use GraphQL\Tests\Executor\TestClasses\Cat;
 use GraphQL\Tests\Executor\TestClasses\Dog;
 use GraphQL\Tests\Executor\TestClasses\Human;
+use GraphQL\Tests\Executor\TestClasses\PetEntity;
 use GraphQL\Type\Definition\InterfaceType;
 use GraphQL\Type\Definition\ObjectType;
 use GraphQL\Type\Definition\Type;
@@ -23,13 +25,11 @@ use PHPUnit\Framework\TestCase;
 /**
  * Execute: Handles execution of abstract types.
  */
-class AbstractTest extends TestCase
+final class AbstractTest extends TestCase
 {
     use ArraySubsetAsserts;
 
-    /**
-     * @see it('isTypeOf used to resolve runtime type for Interface')
-     */
+    /** @see it('isTypeOf used to resolve runtime type for Interface') */
     public function testIsTypeOfUsedToResolveRuntimeTypeForInterface(): void
     {
         // isTypeOf used to resolve runtime type for Interface
@@ -100,9 +100,7 @@ class AbstractTest extends TestCase
         self::assertEquals($expected, $result);
     }
 
-    /**
-     * @see it('isTypeOf used to resolve runtime type for Union')
-     */
+    /** @see it('isTypeOf used to resolve runtime type for Union') */
     public function testIsTypeOfUsedToResolveRuntimeTypeForUnion(): void
     {
         $dogType = new ObjectType([
@@ -165,9 +163,7 @@ class AbstractTest extends TestCase
         self::assertEquals($expected, Executor::execute($schema, Parser::parse($query)));
     }
 
-    /**
-     * @see it('resolveType on Interface yields useful error')
-     */
+    /** @see it('resolveType on Interface yields useful error') */
     public function testResolveTypeOnInterfaceYieldsUsefulError(): void
     {
         $DogType = null;
@@ -192,7 +188,7 @@ class AbstractTest extends TestCase
                 return null;
             },
             'fields' => [
-                'name' => ['type' => Type::string()],
+                'name' => Type::string(),
             ],
         ]);
 
@@ -271,31 +267,29 @@ class AbstractTest extends TestCase
         self::assertArraySubset($expected, $actual);
     }
 
-    /**
-     * @see it('resolveType on Union yields useful error')
-     */
+    /** @see it('resolveType on Union yields useful error') */
     public function testResolveTypeOnUnionYieldsUsefulError(): void
     {
         $HumanType = new ObjectType([
             'name' => 'Human',
             'fields' => [
-                'name' => ['type' => Type::string()],
+                'name' => Type::string(),
             ],
         ]);
 
         $DogType = new ObjectType([
             'name' => 'Dog',
             'fields' => [
-                'name' => ['type' => Type::string()],
-                'woofs' => ['type' => Type::boolean()],
+                'name' => Type::string(),
+                'woofs' => Type::boolean(),
             ],
         ]);
 
         $CatType = new ObjectType([
             'name' => 'Cat',
             'fields' => [
-                'name' => ['type' => Type::string()],
-                'meows' => ['type' => Type::boolean()],
+                'name' => Type::string(),
+                'meows' => Type::boolean(),
             ],
         ]);
 
@@ -374,8 +368,15 @@ class AbstractTest extends TestCase
         self::assertArraySubset($expected, $result);
     }
 
-    /** @see it('resolve Union type using __typename on source object') */
-    public function testResolveUnionTypeUsingTypenameOnSourceObject(): void
+    /**
+     * @dataProvider dogCatRootValues
+     *
+     * @param mixed $dog
+     * @param mixed $cat
+     *
+     * @see it('resolve Union type using __typename on source object')
+     */
+    public function testResolveUnionTypeUsingTypenameOnSourceObject($dog, $cat): void
     {
         $schema = BuildSchema::build('
           type Query {
@@ -411,16 +412,8 @@ class AbstractTest extends TestCase
 
         $rootValue = [
             'pets' => [
-                [
-                    '__typename' => 'Dog',
-                    'name' => 'Odie',
-                    'woofs' => true,
-                ],
-                [
-                    '__typename' => 'Cat',
-                    'name' => 'Garfield',
-                    'meows' => false,
-                ],
+                $dog,
+                $cat,
             ],
         ];
 
@@ -435,8 +428,64 @@ class AbstractTest extends TestCase
         self::assertEquals($expected, $result);
     }
 
-    /** @see it('resolve Interface type using __typename on source object') */
-    public function testResolveInterfaceTypeUsingTypenameOnSourceObject(): void
+    /**
+     * Return possible representations of root values for a dog and a cat with valid __typename.
+     *
+     * @return iterable<array{mixed, mixed}>
+     */
+    public static function dogCatRootValues(): iterable
+    {
+        yield [
+            [
+                '__typename' => 'Dog',
+                'name' => 'Odie',
+                'woofs' => true,
+            ],
+            [
+                '__typename' => 'Cat',
+                'name' => 'Garfield',
+                'meows' => false,
+            ],
+        ];
+        yield [
+            (object) [
+                '__typename' => 'Dog',
+                'name' => 'Odie',
+                'woofs' => true,
+            ],
+            (object) [
+                '__typename' => 'Cat',
+                'name' => 'Garfield',
+                'meows' => false,
+            ],
+        ];
+        yield [
+            new class {
+                public string $__typename = 'Dog';
+
+                public string $name = 'Odie';
+
+                public bool $woofs = true;
+            },
+            new class {
+                public string $__typename = 'Cat';
+
+                public string $name = 'Garfield';
+
+                public bool $meows = false;
+            },
+        ];
+    }
+
+    /**
+     * @dataProvider dogCatRootValues
+     *
+     * @param mixed $dog
+     * @param mixed $cat
+     *
+     * @see it('resolve Interface type using __typename on source object')
+     */
+    public function testResolveInterfaceTypeUsingTypenameOnSourceObject($dog, $cat): void
     {
         $schema = BuildSchema::build('
           type Query {
@@ -445,7 +494,7 @@ class AbstractTest extends TestCase
     
           interface Pet {
             name: String
-            }
+          }
     
           type Cat implements Pet {
             name: String
@@ -474,16 +523,8 @@ class AbstractTest extends TestCase
 
         $rootValue = [
             'pets' => [
-                [
-                    '__typename' => 'Dog',
-                    'name' => 'Odie',
-                    'woofs' => true,
-                ],
-                [
-                    '__typename' => 'Cat',
-                    'name' => 'Garfield',
-                    'meows' => false,
-                ],
+                $dog,
+                $cat,
             ],
         ];
 
@@ -498,35 +539,39 @@ class AbstractTest extends TestCase
         self::assertEquals($expected, $result);
     }
 
-    /**
-     * @see it('returning invalid value from resolveType yields useful error')
-     */
+    /** @see it('returning invalid value from resolveType yields useful error') */
     public function testReturningInvalidValueFromResolveTypeYieldsUsefulError(): void
     {
         // @phpstan-ignore-next-line intentionally wrong
-        $fooInterface = new InterfaceType([
+        $FooInterfaceType = new InterfaceType([
             'name' => 'FooInterface',
-            'fields' => ['bar' => ['type' => Type::string()]],
+            'fields' => [
+                'bar' => Type::string(),
+            ],
             'resolveType' => static fn (): array => [],
         ]);
 
-        $fooObject = new ObjectType([
+        $FooObjectType = new ObjectType([
             'name' => 'FooObject',
-            'fields' => ['bar' => ['type' => Type::string()]],
-            'interfaces' => [$fooInterface],
+            'fields' => [
+                'bar' => Type::string(),
+            ],
+            'interfaces' => [$FooInterfaceType],
+        ]);
+
+        $QueryType = new ObjectType([
+            'name' => 'Query',
+            'fields' => [
+                'foo' => [
+                    'type' => $FooInterfaceType,
+                    'resolve' => static fn (): string => 'dummy',
+                ],
+            ],
         ]);
 
         $schema = new Schema([
-            'query' => new ObjectType([
-                'name' => 'Query',
-                'fields' => [
-                    'foo' => [
-                        'type' => $fooInterface,
-                        'resolve' => static fn (): string => 'dummy',
-                    ],
-                ],
-            ]),
-            'types' => [$fooObject],
+            'query' => $QueryType,
+            'types' => [$FooObjectType],
         ]);
 
         $result = GraphQL::executeQuery($schema, '{ foo { bar } }');
@@ -536,7 +581,9 @@ class AbstractTest extends TestCase
             'errors' => [
                 [
                     'message' => 'Internal server error',
-                    'locations' => [['line' => 1, 'column' => 3]],
+                    'locations' => [
+                        ['line' => 1, 'column' => 3],
+                    ],
                     'path' => ['foo'],
                     'extensions' => [
                         'debugMessage' => 'Abstract type FooInterface must resolve to an Object type at '
@@ -552,71 +599,58 @@ class AbstractTest extends TestCase
 
     public function testWarnsAboutOrphanedTypesWhenMissingType(): void
     {
-        $fooObject = null;
-        $fooInterface = new InterfaceType([
+        $FooObjectType = null;
+        $FooInterfaceType = new InterfaceType([
             'name' => 'FooInterface',
             'fields' => [
-                'bar' => [
-                    'type' => Type::string(),
-                ],
+                'bar' => Type::string(),
             ],
-            'resolveType' => static function () use (&$fooObject): ?ObjectType {
-                return $fooObject;
+            'resolveType' => static function () use (&$FooObjectType): ?ObjectType {
+                return $FooObjectType;
             },
         ]);
 
-        $fooObject = new ObjectType([
+        $FooObjectType = new ObjectType([
             'name' => 'FooObject',
             'fields' => [
-                'bar' => [
-                    'type' => Type::string(),
+                'bar' => Type::string(),
+            ],
+            'interfaces' => [$FooInterfaceType],
+        ]);
+
+        $QueryType = new ObjectType([
+            'name' => 'Query',
+            'fields' => [
+                'foo' => [
+                    'type' => $FooInterfaceType,
+                    'resolve' => static fn (): array => [
+                        'bar' => 'baz',
+                    ],
                 ],
             ],
-            'interfaces' => [$fooInterface],
         ]);
 
         $schema = new Schema([
-            'query' => new ObjectType([
-                'name' => 'Query',
-                'fields' => [
-                    'foo' => [
-                        'type' => $fooInterface,
-                        'resolve' => static fn (): array => ['bar' => 'baz'],
-                    ],
-                ],
-            ]),
+            'query' => $QueryType,
         ]);
 
         $result = GraphQL::executeQuery($schema, '{ foo { bar } }');
 
-        $expected = [
-            'data' => ['foo' => null],
-            'errors' => [
-                [
-                    'message' => 'Internal server error',
-                    'locations' => [['line' => 1, 'column' => 3]],
-                    'path' => ['foo'],
-                    'extensions' => [
-                        'debugMessage' => 'Schema does not contain type "FooObject". '
-                            . 'This can happen when an object type is only referenced indirectly through '
-                            . 'abstract types and never directly through fields.'
-                            . 'List the type in the option "types" during schema construction, '
-                            . 'see https://webonyx.github.io/graphql-php/schema-definition/#configuration-options.',
-                    ],
-                ],
-            ],
-        ];
-        self::assertEquals($expected, $result->toArray(DebugFlag::INCLUDE_DEBUG_MESSAGE));
+        $errors = $result->errors;
+        self::assertCount(1, $errors);
+
+        [$error] = $errors;
+        self::assertStringContainsString(
+            'Schema does not contain type "FooObject". This can happen when an object type is only referenced indirectly through abstract types and never directly through fields.List the type in the option "types" during schema construction, see https://webonyx.github.io/graphql-php/schema-definition/#configuration-options.',
+            $error->getMessage(),
+        );
     }
 
-    /**
-     * @see it('resolveType allows resolving with type name')
-     */
     public function testResolveTypeAllowsResolvingWithTypeName(): void
     {
         $PetType = new InterfaceType([
             'name' => 'Pet',
-            'resolveType' => static function ($obj) {
+            'resolveType' => static function ($obj): ?string {
                 if ($obj instanceof Dog) {
                     return 'Dog';
                 }
@@ -628,7 +662,7 @@ class AbstractTest extends TestCase
                 return null;
             },
             'fields' => [
-                'name' => ['type' => Type::string()],
+                'name' => Type::string(),
             ],
         ]);
 
@@ -636,8 +670,8 @@ class AbstractTest extends TestCase
             'name' => 'Dog',
             'interfaces' => [$PetType],
             'fields' => [
-                'name' => ['type' => Type::string()],
-                'woofs' => ['type' => Type::boolean()],
+                'name' => Type::string(),
+                'woofs' => Type::boolean(),
             ],
         ]);
 
@@ -645,8 +679,165 @@ class AbstractTest extends TestCase
             'name' => 'Cat',
             'interfaces' => [$PetType],
             'fields' => [
-                'name' => ['type' => Type::string()],
-                'meows' => ['type' => Type::boolean()],
+                'name' => Type::string(),
+                'meows' => Type::boolean(),
+            ],
+        ]);
+
+        $QueryType = new ObjectType([
+            'name' => 'Query',
+            'fields' => [
+                'pets' => [
+                    'type' => Type::listOf($PetType),
+                    'resolve' => static fn (): array => [
+                        new Dog('Odie', true),
+                        new Cat('Garfield', false),
+                    ],
+                ],
+            ],
+        ]);
+
+        $schema = new Schema([
+            'query' => $QueryType,
+            'types' => [$CatType, $DogType],
+        ]);
+
+        $query = '
+        {
+          pets {
+            name
+            ... on Dog {
+              woofs
+            }
+            ... on Cat {
+              meows
+            }
+          }
+        }
+        ';
+
+        $result = GraphQL::executeQuery($schema, $query);
+
+        self::assertSame([
+            'data' => [
+                'pets' => [
+                    ['name' => 'Odie', 'woofs' => true],
+                    ['name' => 'Garfield', 'meows' => false],
+                ],
+            ],
+        ], $result->toArray());
+    }
+
+    public function testHintsOnConflictingTypeInstancesInResolveType(): void
+    {
+        /** @var InterfaceType|null $NodeType */
+        $NodeType = null;
+
+        $createTest = function () use (&$NodeType): ObjectType {
+            return new ObjectType([
+                'name' => 'Test',
+                'fields' => [
+                    'a' => Type::string(),
+                ],
+                'interfaces' => function () use ($NodeType): array {
+                    self::assertNotNull($NodeType);
+
+                    return [$NodeType];
+                },
+            ]);
+        };
+
+        $NodeType = new InterfaceType([
+            'name' => 'Node',
+            'fields' => [
+                'a' => Type::string(),
+            ],
+            'resolveType' => $createTest,
+        ]);
+
+        $QueryType = new ObjectType([
+            'name' => 'Query',
+            'fields' => [
+                'node' => $NodeType,
+                'test' => $createTest(),
+            ],
+        ]);
+
+        $schema = new Schema([
+            'query' => $QueryType,
+        ]);
+        $schema->assertValid();
+
+        $query = '
+        {
+            node {
+                a
+            }
+        }
+        ';
+
+        $result = Executor::execute($schema, Parser::parse($query), ['node' => ['a' => 'value']]);
+
+        $errors = $result->errors;
+        self::assertCount(1, $errors);
+
+        [$error] = $errors;
+        self::assertStringContainsString(
+            'Schema must contain unique named types but contains multiple types named "Test". Make sure that `resolveType` function of abstract type "Node" returns the same type instance as referenced anywhere else within the schema (see https://webonyx.github.io/graphql-php/type-definitions/#type-registry).',
+            $error->getMessage()
+        );
+    }
+
+    public function testResolveValueAllowsModifyingObjectValueForInterfaceType(): void
+    {
+        $PetType = new InterfaceType([
+            'name' => 'Pet',
+            'resolveValue' => static function (PetEntity $objectValue): object {
+                if ($objectValue->type === 'dog') {
+                    return new Dog($objectValue->name, $objectValue->vocalizes);
+                }
+
+                return new Cat($objectValue->name, $objectValue->vocalizes);
+            },
+            'resolveType' => static function (object $objectValue): string {
+                if ($objectValue instanceof Dog) {
+                    return 'Dog';
+                }
+
+                return 'Cat';
+            },
+            'fields' => [
+                'name' => Type::string(),
+            ],
+        ]);
+
+        $DogType = new ObjectType([
+            'name' => 'Dog',
+            'interfaces' => [$PetType],
+            'fields' => [
+                'name' => [
+                    'type' => Type::string(),
+                    'resolve' => fn (Dog $dog): string => $dog->name,
+                ],
+                'woofs' => [
+                    'type' => Type::boolean(),
+                    'resolve' => fn (Dog $dog): bool => $dog->woofs,
+                ],
+            ],
+        ]);
+
+        $CatType = new ObjectType([
+            'name' => 'Cat',
+            'interfaces' => [$PetType],
+            'fields' => [
+                'name' => [
+                    'type' => Type::string(),
+                    'resolve' => fn (Cat $cat): string => $cat->name,
+                ],
+                'meows' => [
+                    'type' => Type::boolean(),
+                    'resolve' => fn (Cat $cat): bool => $cat->meows,
+                ],
             ],
         ]);
 
@@ -657,8 +848,8 @@ class AbstractTest extends TestCase
                     'pets' => [
                         'type' => Type::listOf($PetType),
                         'resolve' => static fn (): array => [
-                            new Dog('Odie', true),
-                            new Cat('Garfield', false),
+                            new PetEntity('dog', 'Odie', true),
+                            new PetEntity('cat', 'Garfield', false),
                         ],
                     ],
                 ],
@@ -666,7 +857,8 @@ class AbstractTest extends TestCase
             'types' => [$CatType, $DogType],
         ]);
 
-        $query = '{
+        $query = '
+        {
           pets {
             name
             ... on Dog {
@@ -676,73 +868,109 @@ class AbstractTest extends TestCase
               meows
             }
           }
-        }';
-
-        $result = GraphQL::executeQuery($schema, $query)->toArray();
-
-        self::assertEquals(
-            [
-                'data' => [
-                    'pets' => [
-                        ['name' => 'Odie', 'woofs' => true],
-                        ['name' => 'Garfield', 'meows' => false],
-                    ],
-                ],
-            ],
-            $result
-        );
-    }
-
-    public function testHintsOnConflictingTypeInstancesInResolveType(): void
-    {
-        /** @var InterfaceType $iface */
-        $iface = null;
-
-        $createTest = static function () use (&$iface): ObjectType {
-            return new ObjectType([
-                'name' => 'Test',
-                'fields' => [
-                    'a' => Type::string(),
-                ],
-                'interfaces' => static fn (): array => [$iface],
-            ]);
-        };
-
-        $iface = new InterfaceType([
-            'name' => 'Node',
-            'fields' => [
-                'a' => Type::string(),
-            ],
-            'resolveType' => $createTest,
-        ]);
-
-        $query = new ObjectType([
-            'name' => 'Query',
-            'fields' => [
-                'node' => $iface,
-                'test' => $createTest(),
-            ],
-        ]);
-
-        $schema = new Schema(['query' => $query]);
-        $schema->assertValid();
-
-        $query = '
-            {
-                node {
-                    a
-                }
-            }
+        }
         ';
 
-        $result = Executor::execute($schema, Parser::parse($query), ['node' => ['a' => 'value']]);
+        $result = GraphQL::executeQuery($schema, $query);
 
-        self::assertEquals(
-            'Schema must contain unique named types but contains multiple types named "Test". '
-            . 'Make sure that `resolveType` function of abstract type "Node" returns the same type instance '
-            . 'as referenced anywhere else within the schema '
-            . '(see https://webonyx.github.io/graphql-php/type-definitions/#type-registry).',
-            $result->errors[0]->getMessage()
-        );
+        self::assertSame([
+            'data' => [
+                'pets' => [
+                    ['name' => 'Odie', 'woofs' => true],
+                    ['name' => 'Garfield', 'meows' => false],
+                ],
+            ],
+        ], $result->toArray());
+    }
+
+    public function testResolveValueAllowsModifyingObjectValueForUnionType(): void
+    {
+        $DogType = new ObjectType([
+            'name' => 'Dog',
+            'fields' => [
+                'name' => [
+                    'type' => Type::string(),
+                    'resolve' => fn (Dog $dog): string => $dog->name,
+                ],
+                'woofs' => [
+                    'type' => Type::boolean(),
+                    'resolve' => fn (Dog $dog): bool => $dog->woofs,
+                ],
+            ],
+        ]);
+
+        $CatType = new ObjectType([
+            'name' => 'Cat',
+            'fields' => [
+                'name' => [
+                    'type' => Type::string(),
+                    'resolve' => fn (Cat $cat): string => $cat->name,
+                ],
+                'meows' => [
+                    'type' => Type::boolean(),
+                    'resolve' => fn (Cat $cat): bool => $cat->meows,
+                ],
+            ],
+        ]);
+
+        $PetType = new UnionType([
+            'name' => 'Pet',
+            'types' => [$DogType, $CatType],
+            'resolveValue' => static function (PetEntity $objectValue): object {
+                if ($objectValue->type === 'dog') {
+                    return new Dog($objectValue->name, $objectValue->vocalizes);
+                }
+
+                return new Cat($objectValue->name, $objectValue->vocalizes);
+            },
+            'resolveType' => static function (object $objectValue): string {
+                if ($objectValue instanceof Dog) {
+                    return 'Dog';
+                }
+
+                return 'Cat';
+            },
+        ]);
+
+        $schema = new Schema([
+            'query' => new ObjectType([
+                'name' => 'Query',
+                'fields' => [
+                    'pets' => [
+                        'type' => Type::listOf($PetType),
+                        'resolve' => static fn (): array => [
+                            new PetEntity('dog', 'Odie', true),
+                            new PetEntity('cat', 'Garfield', false),
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $query = '
+        {
+          pets {
+            ... on Dog {
+              name
+              woofs
+            }
+            ... on Cat {
+              name
+              meows
+            }
+          }
+        }
+        ';
+
+        $result = GraphQL::executeQuery($schema, $query);
+
+        self::assertSame([
+            'data' => [
+                'pets' => [
+                    ['name' => 'Odie', 'woofs' => true],
+                    ['name' => 'Garfield', 'meows' => false],
+                ],
+            ],
+        ], $result->toArray());
     }
 }

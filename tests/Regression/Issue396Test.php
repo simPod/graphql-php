@@ -10,12 +10,11 @@ use GraphQL\Type\Definition\Type;
 use GraphQL\Type\Definition\UnionType;
 use GraphQL\Type\Schema;
 use PHPUnit\Framework\TestCase;
-use function stristr;
 
 /**
  * @see https://github.com/webonyx/graphql-php/issues/396
  */
-class Issue396Test extends TestCase
+final class Issue396Test extends TestCase
 {
     public function testUnionResolveType(): void
     {
@@ -60,7 +59,9 @@ class Issue396Test extends TestCase
             ],
         ]);
 
-        $schema = new Schema(['query' => $exampleType]);
+        $schema = new Schema([
+            'query' => $exampleType,
+        ]);
 
         $query = '
             query {
@@ -85,7 +86,7 @@ class Issue396Test extends TestCase
             [['name' => 'B 2'], ['field', 1]],
             [['name' => 'C 3'], ['field', 2]],
         ];
-        self::assertEquals($expected, $log);
+        self::assertSame($expected, $log);
     }
 
     public function testInterfaceResolveType(): void
@@ -163,7 +164,7 @@ class Issue396Test extends TestCase
 
         GraphQL::executeQuery($schema, $query);
 
-        self::assertEquals(
+        self::assertSame(
             [
                 [['name' => 'A 1'], ['field', 0]],
                 [['name' => 'B 2'], ['field', 1]],

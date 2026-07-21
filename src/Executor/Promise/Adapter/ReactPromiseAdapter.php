@@ -2,15 +2,19 @@
 
 namespace GraphQL\Executor\Promise\Adapter;
 
+use GraphQL\Error\InvariantViolation;
 use GraphQL\Executor\Promise\Promise;
 use GraphQL\Executor\Promise\PromiseAdapter;
-use function React\Promise\all;
 use React\Promise\Promise as ReactPromise;
 use React\Promise\PromiseInterface as ReactPromiseInterface;
+
+use function React\Promise\all;
 use function React\Promise\reject;
 use function React\Promise\resolve;
-use Throwable;
 
+/**
+ * @implements PromiseAdapter<ReactPromiseInterface<mixed>>
+ */
 class ReactPromiseAdapter implements PromiseAdapter
 {
     public function isThenable($value): bool
@@ -18,65 +22,85 @@ class ReactPromiseAdapter implements PromiseAdapter
         return $value instanceof ReactPromiseInterface;
     }
 
+    /** @throws InvariantViolation */
     public function convertThenable($thenable): Promise
     {
         return new Promise($thenable, $this);
     }
 
+    /**
+     * @phpstan-param Promise<covariant ReactPromiseInterface<mixed>> $promise
+     *
+     * @throws InvariantViolation
+     *
+     * @phpstan-return Promise<ReactPromiseInterface<mixed>>
+     */
     public function then(Promise $promise, ?callable $onFulfilled = null, ?callable $onRejected = null): Promise
     {
-        $adoptedPromise = $promise->adoptedPromise;
-        assert($adoptedPromise instanceof ReactPromiseInterface);
+        $reactPromise = $promise->adoptedPromise;
 
-        return new Promise($adoptedPromise->then($onFulfilled, $onRejected), $this);
+        return new Promise($reactPromise->then($onFulfilled, $onRejected), $this);
     }
 
+    /**
+     * @throws InvariantViolation
+     *
+     * @phpstan-return Promise<ReactPromiseInterface<mixed>>
+     */
     public function create(callable $resolver): Promise
     {
-        $promise = new ReactPromise($resolver);
+        $reactPromise = new ReactPromise($resolver);
 
-        return new Promise($promise, $this);
+        return new Promise($reactPromise, $this);
     }
 
+    /**
+     * @throws InvariantViolation
+     *
+     * @phpstan-return Promise<ReactPromiseInterface<mixed>>
+     */
     public function createFulfilled($value = null): Promise
     {
-        $promise = resolve($value);
+        $reactPromise = resolve($value);
 
-        return new Promise($promise, $this);
+        return new Promise($reactPromise, $this);
     }
 
-    public function createRejected(Throwable $reason): Promise
+    /**
+     * @throws InvariantViolation
+     *
+     * @phpstan-return Promise<ReactPromiseInterface<mixed>>
+     */
+    public function createRejected(\Throwable $reason): Promise
     {
-        $promise = reject($reason);
+        /** @var ReactPromiseInterface<mixed> $reactPromise */
+        $reactPromise = reject($reason);
 
-        return new Promise($promise, $this);
+        return new Promise($reactPromise, $this);
     }
 
+    /**
+     * @throws InvariantViolation
+     *
+     * @phpstan-return Promise<ReactPromiseInterface<mixed>>
+     */
     public function all(iterable $promisesOrValues): Promise
     {
-        assert(
-            is_array($promisesOrValues),
-            'ReactPromiseAdapter::all(): Argument #1 ($promisesOrValues) must be of type array'
-        );
-
-        // TODO: rework with generators when PHP minimum required version is changed to 5.5+
-
         foreach ($promisesOrValues as &$promiseOrValue) {
             if ($promiseOrValue instanceof Promise) {
                 $promiseOrValue = $promiseOrValue->adoptedPromise;
             }
         }
 
-        $promise = all($promisesOrValues)->then(static function ($values) use ($promisesOrValues): array {
-            $orderedResults = [];
+        $promisesOrValuesArray = is_array($promisesOrValues)
+            ? $promisesOrValues
+            : iterator_to_array($promisesOrValues);
+        /** @var ReactPromiseInterface<mixed> $reactPromise */
+        $reactPromise = all($promisesOrValuesArray)->then(static fn (array $values): array => array_map(
+            static fn ($key) => $values[$key],
+            array_keys($promisesOrValuesArray),
+        ));
 
-            foreach ($promisesOrValues as $key => $value) {
-                $orderedResults[$key] = $values[$key];
-            }
-
-            return $orderedResults;
-        });
-
-        return new Promise($promise, $this);
+        return new Promise($reactPromise, $this);
     }
 }

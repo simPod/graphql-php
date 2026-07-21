@@ -2,10 +2,7 @@
 
 namespace GraphQL\Utils;
 
-use function array_flip;
-use function array_key_exists;
-use function array_keys;
-use function array_merge;
+use GraphQL\Error\InvariantViolation;
 use GraphQL\Type\Definition\Argument;
 use GraphQL\Type\Definition\Directive;
 use GraphQL\Type\Definition\EnumType;
@@ -20,7 +17,6 @@ use GraphQL\Type\Definition\ScalarType;
 use GraphQL\Type\Definition\Type;
 use GraphQL\Type\Definition\UnionType;
 use GraphQL\Type\Schema;
-use TypeError;
 
 /**
  * Utility for finding breaking/dangerous changes between two schemas.
@@ -30,6 +26,8 @@ use TypeError;
  *     breakingChanges: array<int, Change>,
  *     dangerousChanges: array<int, Change>
  * }
+ *
+ * @see \GraphQL\Tests\Utils\BreakingChangesFinderTest
  */
 class BreakingChangesFinder
 {
@@ -59,6 +57,9 @@ class BreakingChangesFinder
      * Given two schemas, returns an Array containing descriptions of all the types
      * of breaking changes covered by the other functions down below.
      *
+     * @throws \TypeError
+     * @throws InvariantViolation
+     *
      * @return array<int, Change>
      */
     public static function findBreakingChanges(Schema $oldSchema, Schema $newSchema): array
@@ -83,6 +84,8 @@ class BreakingChangesFinder
      * Given two schemas, returns an Array containing descriptions of any breaking
      * changes in the newSchema related to removing an entire type.
      *
+     * @throws InvariantViolation
+     *
      * @return array<int, Change>
      */
     public static function findRemovedTypes(
@@ -97,7 +100,7 @@ class BreakingChangesFinder
             if (! isset($newTypeMap[$typeName])) {
                 $breakingChanges[] = [
                     'type' => self::BREAKING_CHANGE_TYPE_REMOVED,
-                    'description' => "${typeName} was removed.",
+                    'description' => "{$typeName} was removed.",
                 ];
             }
         }
@@ -108,6 +111,9 @@ class BreakingChangesFinder
     /**
      * Given two schemas, returns an Array containing descriptions of any breaking
      * changes in the newSchema related to changing the type of a type.
+     *
+     * @throws \TypeError
+     * @throws InvariantViolation
      *
      * @return array<int, Change>
      */
@@ -137,7 +143,7 @@ class BreakingChangesFinder
             $schemaBTypeKindName = self::typeKindName($schemaBType);
             $breakingChanges[] = [
                 'type' => self::BREAKING_CHANGE_TYPE_CHANGED_KIND,
-                'description' => "${typeName} changed from ${schemaATypeKindName} to ${schemaBTypeKindName}.",
+                'description' => "{$typeName} changed from {$schemaATypeKindName} to {$schemaBTypeKindName}.",
             ];
         }
 
@@ -146,6 +152,8 @@ class BreakingChangesFinder
 
     /**
      * @param Type&NamedType $type
+     *
+     * @throws \TypeError
      */
     private static function typeKindName(NamedType $type): string
     {
@@ -173,10 +181,12 @@ class BreakingChangesFinder
             return 'an Input type';
         }
 
-        throw new TypeError('unknown type ' . $type->name);
+        throw new \TypeError('Unknown type: ' . $type->name);
     }
 
     /**
+     * @throws InvariantViolation
+     *
      * @return array<int, Change>
      */
     public static function findFieldsThatChangedTypeOnObjectOrInterfaceTypes(
@@ -190,8 +200,8 @@ class BreakingChangesFinder
         foreach ($oldTypeMap as $typeName => $oldType) {
             $newType = $newTypeMap[$typeName] ?? null;
             if (
-                ! ($oldType instanceof ObjectType || $oldType instanceof InterfaceType)
-                || ! ($newType instanceof ObjectType || $newType instanceof InterfaceType)
+                ! $oldType instanceof ObjectType && ! $oldType instanceof InterfaceType
+                || ! $newType instanceof ObjectType && ! $newType instanceof InterfaceType
                 || ! ($newType instanceof $oldType)
             ) {
                 continue;
@@ -204,7 +214,7 @@ class BreakingChangesFinder
                 if (! isset($newTypeFieldsDef[$fieldName])) {
                     $breakingChanges[] = [
                         'type' => self::BREAKING_CHANGE_FIELD_REMOVED,
-                        'description' => "${typeName}.${fieldName} was removed.",
+                        'description' => "{$typeName}.{$fieldName} was removed.",
                     ];
                 } else {
                     $oldFieldType = $oldTypeFieldsDef[$fieldName]->getType();
@@ -259,6 +269,8 @@ class BreakingChangesFinder
     }
 
     /**
+     * @throws InvariantViolation
+     *
      * @return Changes
      */
     public static function findFieldsThatChangedTypeOnInputObjectTypes(
@@ -282,7 +294,7 @@ class BreakingChangesFinder
                 if (! isset($newTypeFieldsDef[$fieldName])) {
                     $breakingChanges[] = [
                         'type' => self::BREAKING_CHANGE_FIELD_REMOVED,
-                        'description' => "${typeName}.${fieldName} was removed.",
+                        'description' => "{$typeName}.{$fieldName} was removed.",
                     ];
                 } else {
                     $oldFieldType = $oldTypeFieldsDef[$fieldName]->getType();
@@ -293,21 +305,16 @@ class BreakingChangesFinder
                         $newFieldType
                     );
                     if (! $isSafe) {
-                        if ($oldFieldType instanceof NamedType) {
-                            $oldFieldTypeString = $oldFieldType->name;
-                        } else {
-                            $oldFieldTypeString = $oldFieldType;
-                        }
-
-                        if ($newFieldType instanceof NamedType) {
-                            $newFieldTypeString = $newFieldType->name;
-                        } else {
-                            $newFieldTypeString = $newFieldType;
-                        }
+                        $oldFieldTypeString = $oldFieldType instanceof NamedType
+                            ? $oldFieldType->name
+                            : $oldFieldType;
+                        $newFieldTypeString = $newFieldType instanceof NamedType
+                            ? $newFieldType->name
+                            : $newFieldType;
 
                         $breakingChanges[] = [
                             'type' => self::BREAKING_CHANGE_FIELD_CHANGED_KIND,
-                            'description' => "${typeName}.${fieldName} changed type from ${oldFieldTypeString} to ${newFieldTypeString}.",
+                            'description' => "{$typeName}.{$fieldName} changed type from {$oldFieldTypeString} to {$newFieldTypeString}.",
                         ];
                     }
                 }
@@ -323,12 +330,12 @@ class BreakingChangesFinder
                 if ($fieldDef->isRequired()) {
                     $breakingChanges[] = [
                         'type' => self::BREAKING_CHANGE_REQUIRED_INPUT_FIELD_ADDED,
-                        'description' => "A required field ${fieldName} on input type ${newTypeName} was added.",
+                        'description' => "A required field {$fieldName} on input type {$newTypeName} was added.",
                     ];
                 } else {
                     $dangerousChanges[] = [
                         'type' => self::DANGEROUS_CHANGE_OPTIONAL_INPUT_FIELD_ADDED,
-                        'description' => "An optional field ${fieldName} on input type ${newTypeName} was added.",
+                        'description' => "An optional field {$fieldName} on input type {$newTypeName} was added.",
                     ];
                 }
             }
@@ -340,6 +347,7 @@ class BreakingChangesFinder
         ];
     }
 
+    /** @throws InvariantViolation */
     private static function isChangeSafeForInputObjectFieldOrFieldArg(
         Type $oldType,
         Type $newType
@@ -380,6 +388,8 @@ class BreakingChangesFinder
      * Given two schemas, returns an Array containing descriptions of any breaking
      * changes in the newSchema related to removing types from a union type.
      *
+     * @throws InvariantViolation
+     *
      * @return array<int, Change>
      */
     public static function findTypesRemovedFromUnions(
@@ -417,6 +427,8 @@ class BreakingChangesFinder
     /**
      * Given two schemas, returns an Array containing descriptions of any breaking
      * changes in the newSchema related to removing values from an enum type.
+     *
+     * @throws InvariantViolation
      *
      * @return array<int, Change>
      */
@@ -458,6 +470,8 @@ class BreakingChangesFinder
      * (such as removal or change of type of an argument, or a change in an
      * argument's default value).
      *
+     * @throws InvariantViolation
+     *
      * @return Changes
      */
     public static function findArgChanges(
@@ -473,8 +487,8 @@ class BreakingChangesFinder
         foreach ($oldTypeMap as $typeName => $oldType) {
             $newType = $newTypeMap[$typeName] ?? null;
             if (
-                ! ($oldType instanceof ObjectType || $oldType instanceof InterfaceType)
-                || ! ($newType instanceof ObjectType || $newType instanceof InterfaceType)
+                ! $oldType instanceof ObjectType && ! $oldType instanceof InterfaceType
+                || ! $newType instanceof ObjectType && ! $newType instanceof InterfaceType
                 || ! ($newType instanceof $oldType)
             ) {
                 continue;
@@ -507,12 +521,12 @@ class BreakingChangesFinder
                             $newArgType = $newArgDef->getType();
                             $breakingChanges[] = [
                                 'type' => self::BREAKING_CHANGE_ARG_CHANGED_KIND,
-                                'description' => "${typeName}.${fieldName} arg ${oldArgName} has changed type from ${oldArgType} to ${newArgType}",
+                                'description' => "{$typeName}.{$fieldName} arg {$oldArgName} has changed type from {$oldArgType} to {$newArgType}",
                             ];
                         } elseif ($oldArgDef->defaultValueExists() && $oldArgDef->defaultValue !== $newArgDef->defaultValue) {
                             $dangerousChanges[] = [
                                 'type' => self::DANGEROUS_CHANGE_ARG_DEFAULT_VALUE_CHANGED,
-                                'description' => "${typeName}.${fieldName} arg ${oldArgName} has changed defaultValue",
+                                'description' => "{$typeName}.{$fieldName} arg {$oldArgName} has changed defaultValue",
                             ];
                         }
                     } else {
@@ -540,12 +554,12 @@ class BreakingChangesFinder
                         if ($newTypeFieldArgDef->isRequired()) {
                             $breakingChanges[] = [
                                 'type' => self::BREAKING_CHANGE_REQUIRED_ARG_ADDED,
-                                'description' => "A required arg ${newArgName} on ${newTypeName}.${fieldName} was added",
+                                'description' => "A required arg {$newArgName} on {$newTypeName}.{$fieldName} was added",
                             ];
                         } else {
                             $dangerousChanges[] = [
                                 'type' => self::DANGEROUS_CHANGE_OPTIONAL_ARG_ADDED,
-                                'description' => "An optional arg ${newArgName} on ${newTypeName}.${fieldName} was added",
+                                'description' => "An optional arg {$newArgName} on {$newTypeName}.{$fieldName} was added",
                             ];
                         }
                     }
@@ -560,6 +574,8 @@ class BreakingChangesFinder
     }
 
     /**
+     * @throws InvariantViolation
+     *
      * @return array<int, Change>
      */
     public static function findInterfacesRemovedFromObjectTypes(
@@ -599,6 +615,8 @@ class BreakingChangesFinder
     }
 
     /**
+     * @throws InvariantViolation
+     *
      * @return array<int, Change>
      */
     public static function findRemovedDirectives(Schema $oldSchema, Schema $newSchema): array
@@ -619,6 +637,8 @@ class BreakingChangesFinder
     }
 
     /**
+     * @throws InvariantViolation
+     *
      * @return array<string, Directive>
      */
     private static function getDirectiveMapForSchema(Schema $schema): array
@@ -632,6 +652,8 @@ class BreakingChangesFinder
     }
 
     /**
+     * @throws InvariantViolation
+     *
      * @return array<int, Change>
      */
     public static function findRemovedDirectiveArgs(Schema $oldSchema, Schema $newSchema): array
@@ -660,9 +682,7 @@ class BreakingChangesFinder
         return $removedDirectiveArgs;
     }
 
-    /**
-     * @return array<int, Argument>
-     */
+    /** @return array<int, Argument> */
     public static function findRemovedArgsForDirectives(Directive $oldDirective, Directive $newDirective): array
     {
         $removedArgs = [];
@@ -676,9 +696,7 @@ class BreakingChangesFinder
         return $removedArgs;
     }
 
-    /**
-     * @return array<string, Argument>
-     */
+    /** @return array<string, Argument> */
     private static function getArgumentMapForDirective(Directive $directive): array
     {
         $args = [];
@@ -690,6 +708,8 @@ class BreakingChangesFinder
     }
 
     /**
+     * @throws InvariantViolation
+     *
      * @return array<int, Change>
      */
     public static function findAddedNonNullDirectiveArgs(Schema $oldSchema, Schema $newSchema): array
@@ -720,9 +740,7 @@ class BreakingChangesFinder
         return $addedNonNullableArgs;
     }
 
-    /**
-     * @return array<int, Argument>
-     */
+    /** @return array<int, Argument> */
     public static function findAddedArgsForDirective(Directive $oldDirective, Directive $newDirective): array
     {
         $addedArgs = [];
@@ -737,6 +755,8 @@ class BreakingChangesFinder
     }
 
     /**
+     * @throws InvariantViolation
+     *
      * @return array<int, Change>
      */
     public static function findRemovedDirectiveLocations(Schema $oldSchema, Schema $newSchema): array
@@ -765,9 +785,7 @@ class BreakingChangesFinder
         return $removedLocations;
     }
 
-    /**
-     * @return array<int, string>
-     */
+    /** @return array<int, string> */
     public static function findRemovedLocationsForDirective(Directive $oldDirective, Directive $newDirective): array
     {
         $removedLocations = [];
@@ -785,6 +803,8 @@ class BreakingChangesFinder
      * Given two schemas, returns an Array containing descriptions of all the types
      * of potentially dangerous changes covered by the other functions down below.
      *
+     * @throws InvariantViolation
+     *
      * @return array<int, Change>
      */
     public static function findDangerousChanges(Schema $oldSchema, Schema $newSchema): array
@@ -801,6 +821,8 @@ class BreakingChangesFinder
     /**
      * Given two schemas, returns an Array containing descriptions of any dangerous
      * changes in the newSchema related to adding values to an enum type.
+     *
+     * @throws InvariantViolation
      *
      * @return array<int, Change>
      */
@@ -837,6 +859,8 @@ class BreakingChangesFinder
     }
 
     /**
+     * @throws InvariantViolation
+     *
      * @return array<int, Change>
      */
     public static function findInterfacesAddedToObjectTypes(
@@ -850,8 +874,8 @@ class BreakingChangesFinder
         foreach ($newTypeMap as $typeName => $newType) {
             $oldType = $oldTypeMap[$typeName] ?? null;
             if (
-                ! ($oldType instanceof ObjectType || $oldType instanceof InterfaceType)
-                || ! ($newType instanceof ObjectType || $newType instanceof InterfaceType)
+                ! $oldType instanceof ObjectType && ! $oldType instanceof InterfaceType
+                || ! $newType instanceof ObjectType && ! $newType instanceof InterfaceType
             ) {
                 continue;
             }
@@ -881,6 +905,8 @@ class BreakingChangesFinder
     /**
      * Given two schemas, returns an Array containing descriptions of any dangerous
      * changes in the newSchema related to adding types to a union type.
+     *
+     * @throws InvariantViolation
      *
      * @return array<int, Change>
      */

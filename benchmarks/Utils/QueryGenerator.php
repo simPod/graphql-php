@@ -2,7 +2,6 @@
 
 namespace GraphQL\Benchmarks\Utils;
 
-use function count;
 use GraphQL\Language\AST\DocumentNode;
 use GraphQL\Language\AST\FieldNode;
 use GraphQL\Language\AST\NameNode;
@@ -15,8 +14,6 @@ use GraphQL\Type\Definition\InterfaceType;
 use GraphQL\Type\Definition\ObjectType;
 use GraphQL\Type\Definition\Type;
 use GraphQL\Type\Schema;
-use function max;
-use function round;
 
 class QueryGenerator
 {
@@ -24,7 +21,7 @@ class QueryGenerator
 
     private int $maxLeafFields;
 
-    private int $currentLeafFields;
+    private int $currentLeafFields = 0;
 
     public function __construct(Schema $schema, float $percentOfLeafFields)
     {
@@ -40,7 +37,6 @@ class QueryGenerator
         }
 
         $this->maxLeafFields = max(1, (int) round($totalFields * $percentOfLeafFields));
-        $this->currentLeafFields = 0;
     }
 
     public function buildQuery(): string
@@ -63,9 +59,7 @@ class QueryGenerator
         return Printer::doPrint($ast);
     }
 
-    /**
-     * @param array<FieldDefinition> $fields
-     */
+    /** @param array<FieldDefinition> $fields */
     public function buildSelectionSet(array $fields): SelectionSetNode
     {
         $selections = [

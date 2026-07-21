@@ -11,10 +11,16 @@ use GraphQL\Type\SchemaConfig;
 
 /**
  * @BeforeMethods({"setUp"})
+ *
  * @OutputTimeUnit("milliseconds", precision=3)
- * @Warmup(1)
- * @Revs(5)
- * @Iterations(1)
+ *
+ * @Warmup(2)
+ *
+ * @Sleep(500000)
+ *
+ * @Revs(10)
+ *
+ * @Iterations(5)
  */
 class HugeSchemaBench
 {
@@ -46,6 +52,7 @@ class HugeSchemaBench
             ->getTypeMap();
     }
 
+    /** @Revs(1000) */
     public function benchSchemaLazy(): void
     {
         $this->createLazySchema();
@@ -65,7 +72,7 @@ class HugeSchemaBench
     private function createLazySchema(): Schema
     {
         return new Schema(
-            SchemaConfig::create()
+            (new SchemaConfig())
                 ->setQuery($this->schemaGenerator->buildQueryType())
                 ->setTypeLoader(fn (string $name): Type => $this->schemaGenerator->loadType($name))
         );

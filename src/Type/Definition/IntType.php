@@ -2,17 +2,12 @@
 
 namespace GraphQL\Type\Definition;
 
-use function floor;
 use GraphQL\Error\Error;
 use GraphQL\Error\SerializationError;
 use GraphQL\Language\AST\IntValueNode;
 use GraphQL\Language\AST\Node;
 use GraphQL\Language\Printer;
 use GraphQL\Utils\Utils;
-use function is_bool;
-use function is_float;
-use function is_int;
-use function is_numeric;
 
 class IntType extends ScalarType
 {
@@ -30,6 +25,7 @@ class IntType extends ScalarType
         = 'The `Int` scalar type represents non-fractional signed whole numeric
 values. Int can represent values between -(2^31) and 2^31 - 1. ';
 
+    /** @throws SerializationError */
     public function serialize($value): int
     {
         // Fast path for 90+% of cases:
@@ -54,24 +50,29 @@ values. Int can represent values between -(2^31) and 2^31 - 1. ';
         return (int) $float;
     }
 
+    /** @throws Error */
     public function parseValue($value): int
     {
         $isInt = is_int($value)
             || (is_float($value) && floor($value) === $value);
 
         if (! $isInt) {
-            $notInt = Utils::printSafe($value);
+            $notInt = Utils::printSafeJson($value);
             throw new Error("Int cannot represent non-integer value: {$notInt}");
         }
 
         if ($value > self::MAX_INT || $value < self::MIN_INT) {
-            $outOfRangeInt = Utils::printSafe($value);
+            $outOfRangeInt = Utils::printSafeJson($value);
             throw new Error("Int cannot represent non 32-bit signed integer value: {$outOfRangeInt}");
         }
 
         return (int) $value;
     }
 
+    /**
+     * @throws \JsonException
+     * @throws Error
+     */
     public function parseLiteral(Node $valueNode, ?array $variables = null): int
     {
         if ($valueNode instanceof IntValueNode) {

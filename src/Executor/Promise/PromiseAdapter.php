@@ -2,10 +2,10 @@
 
 namespace GraphQL\Executor\Promise;
 
-use Throwable;
-
 /**
  * Provides a means for integration of async PHP platforms ([related docs](data-fetching.md#async-php)).
+ *
+ * @template TAdopted = mixed
  */
 interface PromiseAdapter
 {
@@ -23,6 +23,8 @@ interface PromiseAdapter
      *
      * @param mixed $thenable
      *
+     * @phpstan-return Promise<TAdopted>
+     *
      * @api
      */
     public function convertThenable($thenable): Promise;
@@ -30,6 +32,10 @@ interface PromiseAdapter
     /**
      * Accepts our Promise wrapper, extracts adopted promise out of it and executes actual `then` logic described
      * in Promises/A+ specs. Then returns new wrapped instance of GraphQL\Executor\Promise\Promise.
+     *
+     * @phpstan-param Promise<covariant TAdopted> $promise
+     *
+     * @phpstan-return Promise<TAdopted>
      *
      * @api
      */
@@ -40,6 +46,8 @@ interface PromiseAdapter
      *
      * @param callable(callable $resolve, callable $reject): void $resolver
      *
+     * @phpstan-return Promise<TAdopted>
+     *
      * @api
      */
     public function create(callable $resolver): Promise;
@@ -49,24 +57,28 @@ interface PromiseAdapter
      *
      * @param mixed $value
      *
+     * @phpstan-return Promise<TAdopted>
+     *
      * @api
      */
     public function createFulfilled($value = null): Promise;
 
     /**
-     * Creates a rejected promise for a reason if the reason is not a promise.
+     * Return a promise rejected with the given reason.
      *
-     * If the provided reason is a promise, then it is returned as-is.
+     * @phpstan-return Promise<TAdopted>
      *
      * @api
      */
-    public function createRejected(Throwable $reason): Promise;
+    public function createRejected(\Throwable $reason): Promise;
 
     /**
      * Given an iterable of promises (or values), returns a promise that is fulfilled when all the
      * items in the iterable are fulfilled.
      *
      * @param iterable<Promise|mixed> $promisesOrValues
+     *
+     * @phpstan-return Promise<TAdopted>
      *
      * @api
      */

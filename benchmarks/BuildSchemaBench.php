@@ -3,14 +3,19 @@
 namespace GraphQL\Benchmarks;
 
 use GraphQL\Utils\BuildSchema;
-use function range;
 
 /**
  * @BeforeMethods({"makeSchemaString"})
+ *
  * @OutputTimeUnit("milliseconds", precision=3)
+ *
  * @Warmup(2)
+ *
+ * @Sleep(500000)
+ *
  * @Revs(10)
- * @Iterations(2)
+ *
+ * @Iterations(5)
  */
 class BuildSchemaBench
 {

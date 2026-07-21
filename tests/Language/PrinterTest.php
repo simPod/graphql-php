@@ -10,13 +10,14 @@ use GraphQL\Language\Printer;
 use GraphQL\Tests\TestCaseBase;
 use GraphQL\Type\Definition\Type;
 use GraphQL\Utils\AST;
+
 use function Safe\file_get_contents;
 
-class PrinterTest extends TestCaseBase
+/**
+ * @see describe('Printer: Query document', () => {
+ */
+final class PrinterTest extends TestCaseBase
 {
-    /**
-     * @see it('does not alter ast')
-     */
     public function testDoesntAlterAST(): void
     {
         $kitchenSink = file_get_contents(__DIR__ . '/kitchen-sink.graphql');
@@ -29,9 +30,7 @@ class PrinterTest extends TestCaseBase
         self::assertEquals($astCopy, $ast);
     }
 
-    /**
-     * @see it('prints minimal ast')
-     */
+    /** @see it('prints minimal ast', () => { */
     public function testPrintsMinimalAst(): void
     {
         $ast = new FieldNode([
@@ -39,50 +38,70 @@ class PrinterTest extends TestCaseBase
             'arguments' => new NodeList([]),
             'directives' => new NodeList([]),
         ]);
-        self::assertEquals('foo', Printer::doPrint($ast));
+        self::assertSame('foo', Printer::doPrint($ast));
     }
 
-    /**
-     * @see it('correctly prints non-query operations without name')
-     */
-    public function testCorrectlyPrintsOpsWithoutName(): void
+    /** @see it('produces helpful error messages', () => { */
+    public function testProducesHelpfulErrorMessages(): void
+    {
+        self::markTestSkipped('Unnecessary because our class based AST makes it impossible to pass bad data.');
+    }
+
+    /** @see it('correctly prints non-query operations without name', () => { */
+    public function testCorrectlyPrintsNonQueryOperationsWithoutName(): void
     {
         $queryAstShorthanded = Parser::parse('query { id, name }');
 
-        $expected = '{
-  id
-  name
-}
-';
-        self::assertEquals($expected, Printer::doPrint($queryAstShorthanded));
+        self::assertSame(
+            <<<'GRAPHQL'
+      {
+        id
+        name
+      }
+
+      GRAPHQL,
+            Printer::doPrint($queryAstShorthanded)
+        );
 
         $mutationAst = Parser::parse('mutation { id, name }');
-        $expected = 'mutation {
-  id
-  name
-}
-';
-        self::assertEquals($expected, Printer::doPrint($mutationAst));
+        self::assertSame(
+            <<<'GRAPHQL'
+      mutation {
+        id
+        name
+      }
+
+      GRAPHQL,
+            Printer::doPrint($mutationAst)
+        );
 
         $queryAstWithArtifacts = Parser::parse(
             'query ($foo: TestType) @testDirective { id, name }'
         );
-        $expected = 'query ($foo: TestType) @testDirective {
-  id
-  name
-}
-';
-        self::assertEquals($expected, Printer::doPrint($queryAstWithArtifacts));
+        self::assertSame(
+            <<<'GRAPHQL'
+      query ($foo: TestType) @testDirective {
+        id
+        name
+      }
+
+      GRAPHQL,
+            Printer::doPrint($queryAstWithArtifacts)
+        );
 
         $mutationAstWithArtifacts = Parser::parse(
             'mutation ($foo: TestType) @testDirective { id, name }'
         );
-        $expected = 'mutation ($foo: TestType) @testDirective {
-  id
-  name
-}
-';
-        self::assertEquals($expected, Printer::doPrint($mutationAstWithArtifacts));
+        self::assertSame(
+            <<<'GRAPHQL'
+      mutation ($foo: TestType) @testDirective {
+        id
+        name
+      }
+
+      GRAPHQL,
+            Printer::doPrint($mutationAstWithArtifacts)
+        );
     }
 
     public function testCorrectlyPrintsOpsWithNonNullableVariableArgument(): void
@@ -98,43 +117,86 @@ class PrinterTest extends TestCaseBase
   }
 }
 ';
-        self::assertEquals($expected, Printer::doPrint($queryWithNonNullVariable));
+        self::assertSame($expected, Printer::doPrint($queryWithNonNullVariable));
     }
 
-    /**
-     * @see it('prints query with variable directives')
-     */
+    /** @see it('prints query with variable directives', () => { */
     public function testPrintsQueryWithVariableDirectives(): void
     {
         $queryAstWithVariableDirective = Parser::parse(
             'query ($foo: TestType = {a: 123} @testDirective(if: true) @test) { id }'
         );
-        $expected = 'query ($foo: TestType = {a: 123} @testDirective(if: true) @test) {
-  id
-}
-';
-        self::assertEquals($expected, Printer::doPrint($queryAstWithVariableDirective));
+        self::assertSame(
+            <<<'GRAPHQL'
+      query ($foo: TestType = { a: 123 } @testDirective(if: true) @test) {
+        id
+      }
+
+      GRAPHQL,
+            Printer::doPrint($queryAstWithVariableDirective)
+        );
     }
 
-    /**
-     * @see it('prints fragment with variable directives')
-     */
+    /** @see it('keeps arguments on one line if line is short (<= 80 chars)', () => { */
+    public function testKeepsArgumentsOnOneLineIfLineIsShortBelowOrEquals80Chars(): void
+    {
+        $queryASTWithMultipleArguments = Parser::parse(
+            '{trip(wheelchair:false arriveBy:false){dateTime}}',
+        );
+        self::assertSame(
+            <<<'GRAPHQL'
+      {
+        trip(wheelchair: false, arriveBy: false) {
+          dateTime
+        }
+      }
+
+      GRAPHQL,
+            Printer::doPrint($queryASTWithMultipleArguments)
+        );
+    }
+
+    /** @see it('puts arguments on multiple lines if line is long (> 80 chars)', () => { */
+    public function testPutsArgumentsOnMultipleLinesIfLineIsLongMoreThan80Chars(): void
+    {
+        $queryASTWithMultipleArguments = Parser::parse(
+            '{trip(wheelchair:false arriveBy:false includePlannedCancellations:true transitDistanceReluctance:2000){dateTime}}',
+        );
+        self::assertSame(
+            <<<'GRAPHQL'
+      {
+        trip(
+          wheelchair: false
+          arriveBy: false
+          includePlannedCancellations: true
+          transitDistanceReluctance: 2000
+        ) {
+          dateTime
+        }
+      }
+
+      GRAPHQL,
+            Printer::doPrint($queryASTWithMultipleArguments)
+        );
+    }
+
+    /** @see it('prints fragment with variable directives') */
     public function testPrintsFragmentWithVariableDirectives(): void
     {
         $queryAstWithVariableDirective = Parser::parse(
             'fragment Foo($foo: TestType @test) on TestType @testDirective { id }',
             ['experimentalFragmentVariables' => true]
         );
-        $expected = 'fragment Foo($foo: TestType @test) on TestType @testDirective {
+        $expected = <<<'GRAPHQL'
+fragment Foo($foo: TestType @test) on TestType @testDirective {
   id
 }
-';
-        self::assertEquals($expected, Printer::doPrint($queryAstWithVariableDirective));
+
+GRAPHQL;
+        self::assertSame($expected, Printer::doPrint($queryAstWithVariableDirective));
     }
 
-    /**
-     * @see it('Experimental: correctly prints fragment defined variables')
-     */
+    /** @see it('Experimental: correctly prints fragment defined variables') */
     public function testExperimentalCorrectlyPrintsFragmentDefinedVariables(): void
     {
         $fragmentWithVariable = Parser::parse(
@@ -146,26 +208,24 @@ class PrinterTest extends TestCaseBase
             ['experimentalFragmentVariables' => true]
         );
 
-        self::assertEquals(
-            Printer::doPrint($fragmentWithVariable),
-            'fragment Foo($a: ComplexType, $b: Boolean = false) on TestType {
+        self::assertSame(
+            <<<'GRAPHQL'
+fragment Foo($a: ComplexType, $b: Boolean = false) on TestType {
   id
 }
-'
+
+GRAPHQL,
+            Printer::doPrint($fragmentWithVariable)
         );
     }
 
-    /**
-     * @see it('prints kitchen sink')
-     */
-    public function testPrintsKitchenSink(): void
+    /** @see it('prints kitchen sink without altering ast', () => { */
+    public function testPrintsKitchenSinkWithoutAlteringAST(): void
     {
         $kitchenSink = file_get_contents(__DIR__ . '/kitchen-sink.graphql');
         $ast = Parser::parse($kitchenSink);
 
-        $printed = Printer::doPrint($ast);
-
-        $expected = <<<'EOT'
+        self::assertSame(<<<'GRAPHQL'
 query queryName($foo: ComplexType, $site: Site = MOBILE) {
   whoever123is: node(id: [123, 456]) {
     id
@@ -209,9 +269,13 @@ subscription StoryLikeSubscription($input: StoryLikeSubscribeInput) {
 }
 
 fragment frag on Friend {
-  foo(size: $size, bar: $b, obj: {key: "value", block: """
+  foo(
+    size: $size
+    bar: $b
+    obj: { key: "value", block: """
     block string uses \"""
-  """})
+    """ }
+  )
 }
 
 {
@@ -219,13 +283,37 @@ fragment frag on Friend {
   query
 }
 
-EOT;
-        self::assertEquals($expected, $printed);
+GRAPHQL, Printer::doPrint($ast));
     }
 
     public function testPrintPrimitives(): void
     {
         self::assertASTMatches('3', AST::astFromValue(3, Type::int()));
         self::assertASTMatches('3.14', AST::astFromValue(3.14, Type::float()));
+    }
+
+    public function testDoNotEscapeForwardSlash(): void
+    {
+        $ast = Parser::parse(
+            <<<'GRAPHQL'
+query {
+    search(query: "repo: webonyx/graphql-php") {
+        id
+    }
+}
+GRAPHQL
+        );
+
+        self::assertSame(
+            <<<'GRAPHQL'
+{
+  search(query: "repo: webonyx/graphql-php") {
+    id
+  }
+}
+
+GRAPHQL,
+            Printer::doPrint($ast),
+        );
     }
 }

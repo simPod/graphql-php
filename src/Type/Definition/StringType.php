@@ -8,10 +8,6 @@ use GraphQL\Language\AST\Node;
 use GraphQL\Language\AST\StringValueNode;
 use GraphQL\Language\Printer;
 use GraphQL\Utils\Utils;
-use function is_object;
-use function is_scalar;
-use function is_string;
-use function method_exists;
 
 class StringType extends ScalarType
 {
@@ -22,6 +18,7 @@ class StringType extends ScalarType
 character sequences. The String type is most often used by GraphQL to
 represent free-form human-readable text.';
 
+    /** @throws SerializationError */
     public function serialize($value): string
     {
         $canCast = is_scalar($value)
@@ -29,24 +26,28 @@ represent free-form human-readable text.';
             || $value === null;
 
         if (! $canCast) {
-            throw new SerializationError(
-                'String cannot represent value: ' . Utils::printSafe($value)
-            );
+            $notStringable = Utils::printSafe($value);
+            throw new SerializationError("String cannot represent value: {$notStringable}");
         }
 
         return (string) $value;
     }
 
+    /** @throws Error */
     public function parseValue($value): string
     {
         if (! is_string($value)) {
-            $notString = Utils::printSafe($value);
+            $notString = Utils::printSafeJson($value);
             throw new Error("String cannot represent a non string value: {$notString}");
         }
 
         return $value;
     }
 
+    /**
+     * @throws \JsonException
+     * @throws Error
+     */
     public function parseLiteral(Node $valueNode, ?array $variables = null): string
     {
         if ($valueNode instanceof StringValueNode) {

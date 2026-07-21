@@ -2,31 +2,28 @@
 
 namespace GraphQL\Tests\Server;
 
-use function count;
 use DMS\PHPUnitExtensions\ArraySubset\ArraySubsetAsserts;
-use Exception;
 use GraphQL\Error\DebugFlag;
 use GraphQL\Error\Error;
 use GraphQL\Error\InvariantViolation;
 use GraphQL\Executor\ExecutionResult;
 use GraphQL\Language\AST\DocumentNode;
 use GraphQL\Language\Parser;
+use GraphQL\Server\Exception\MissingQueryOrQueryIdParameter;
 use GraphQL\Server\Helper;
 use GraphQL\Server\OperationParams;
-use GraphQL\Server\RequestError;
 use GraphQL\Server\ServerConfig;
 use GraphQL\Validator\DocumentValidator;
 use GraphQL\Validator\Rules\CustomValidationRule;
 use GraphQL\Validator\ValidationContext;
-use stdClass;
 
-class QueryExecutionTest extends ServerTestCase
+final class QueryExecutionTest extends ServerTestCase
 {
     use ArraySubsetAsserts;
 
     private ServerConfig $config;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         $schema = $this->buildSchema();
         $this->config = ServerConfig::create()
@@ -45,8 +42,10 @@ class QueryExecutionTest extends ServerTestCase
     }
 
     /**
-     * @param array<string, mixed>      $expected
+     * @param array<string, mixed> $expected
      * @param array<string, mixed>|null $variables
+     *
+     * @throws \Exception
      */
     private function assertQueryResultEquals(array $expected, string $query, ?array $variables = null, ?string $queryId = null): ExecutionResult
     {
@@ -58,6 +57,8 @@ class QueryExecutionTest extends ServerTestCase
 
     /**
      * @param array<string, mixed>|null $variables
+     *
+     * @throws \Exception
      */
     private function executeQuery(string $query, ?array $variables = null, bool $readonly = false, ?string $queryId = null): ExecutionResult
     {
@@ -112,6 +113,8 @@ class QueryExecutionTest extends ServerTestCase
                     'path' => ['fieldWithSafeException'],
                     'extensions' => [
                         'trace' => [],
+                        'line' => 40,
+                        'file' => __DIR__ . '/ServerTestCase.php',
                     ],
                 ],
             ],
@@ -124,19 +127,20 @@ class QueryExecutionTest extends ServerTestCase
     public function testRethrowUnsafeExceptions(): void
     {
         $this->config->setDebugFlag(DebugFlag::RETHROW_UNSAFE_EXCEPTIONS);
-        $this->expectException(Unsafe::class);
-
-        $this->executeQuery('
+        $executionResult = $this->executeQuery('
         {
             fieldWithUnsafeException
         }
-        ')->toArray();
+        ');
+
+        $this->expectException(Unsafe::class);
+        $executionResult->toArray();
     }
 
     public function testPassesRootValueAndContext(): void
     {
         $rootValue = 'myRootValue';
-        $context = new stdClass();
+        $context = new \stdClass();
 
         $this->config
             ->setContext($context)
@@ -148,7 +152,7 @@ class QueryExecutionTest extends ServerTestCase
         }
         ';
 
-        self::assertTrue(! isset($context->testedRootValue));
+        self::assertFalse(property_exists($context, 'testedRootValue'));
         $this->executeQuery($query);
         self::assertSame($rootValue, $context->testedRootValue);
     }
@@ -218,10 +222,10 @@ class QueryExecutionTest extends ServerTestCase
 
         self::assertFalse($called);
         $this->executeQuery('{f1}');
-        self::assertTrue($called);
+        self::assertTrue($called); // @phpstan-ignore-line value is mutable
         self::assertInstanceOf(OperationParams::class, $params);
         self::assertInstanceOf(DocumentNode::class, $doc);
-        self::assertEquals('query', $operationType);
+        self::assertSame('query', $operationType);
     }
 
     public function testAllowsDifferentValidationRulesDependingOnOperation(): void
@@ -258,8 +262,8 @@ class QueryExecutionTest extends ServerTestCase
         $called2 = false;
         $expected = ['errors' => [['message' => 'This is the error we are looking for!']]];
         $this->assertQueryResultEquals($expected, $q2);
-        self::assertFalse($called1);
-        self::assertTrue($called2);
+        self::assertFalse($called1); // @phpstan-ignore-line value is mutable
+        self::assertTrue($called2); // @phpstan-ignore-line value is mutable
     }
 
     public function testAllowsSkippingValidation(): void
@@ -279,11 +283,13 @@ class QueryExecutionTest extends ServerTestCase
                 ['message' => 'Persisted queries are not supported by this server'],
             ],
         ];
-        self::assertEquals($expected, $result->toArray());
+        self::assertSame($expected, $result->toArray());
     }
 
     /**
      * @param array<string, mixed>|null $variables
+     *
+     * @throws \Exception
      */
     private function executePersistedQuery(string $queryId, ?array $variables = null): ExecutionResult
     {
@@ -320,12 +326,14 @@ class QueryExecutionTest extends ServerTestCase
             ],
         ];
 
-        self::assertEquals($expected[0], $result[0]->toArray());
-        self::assertEquals($expected[1], $result[1]->toArray());
+        self::assertSame($expected[0], $result[0]->toArray());
+        self::assertSame($expected[1], $result[1]->toArray());
     }
 
     /**
      * @param array<array<string, mixed>> $qs
+     *
+     * @throws \Exception
      *
      * @return array<int, ExecutionResult>
      */
@@ -355,7 +363,7 @@ class QueryExecutionTest extends ServerTestCase
         ];
 
         $result = $this->executeQuery($mutation, null, true);
-        self::assertEquals($expected, $result->toArray());
+        self::assertSame($expected, $result->toArray());
     }
 
     public function testAllowsPersistedQueries(): void
@@ -363,7 +371,7 @@ class QueryExecutionTest extends ServerTestCase
         $called = false;
         $this->config->setPersistedQueryLoader(static function ($queryId, OperationParams $params) use (&$called): string {
             $called = true;
-            self::assertEquals('some-id', $queryId);
+            self::assertSame('some-id', $queryId);
 
             return '{f1}';
         });
@@ -374,19 +382,19 @@ class QueryExecutionTest extends ServerTestCase
         $expected = [
             'data' => ['f1' => 'f1'],
         ];
-        self::assertEquals($expected, $result->toArray());
+        self::assertSame($expected, $result->toArray());
 
         // Make sure it allows returning document node:
         $called = false;
         $this->config->setPersistedQueryLoader(static function ($queryId, OperationParams $params) use (&$called): DocumentNode {
             $called = true;
-            self::assertEquals('some-id', $queryId);
+            self::assertSame('some-id', $queryId);
 
             return Parser::parse('{f1}');
         });
         $result = $this->executePersistedQuery('some-id');
         self::assertTrue($called);
-        self::assertEquals($expected, $result->toArray());
+        self::assertSame($expected, $result->toArray());
     }
 
     public function testProhibitsInvalidPersistedQueryLoader(): void
@@ -395,8 +403,7 @@ class QueryExecutionTest extends ServerTestCase
         $this->config->setPersistedQueryLoader(static fn (): array => ['err' => 'err']);
 
         $this->expectExceptionObject(new InvariantViolation(
-            'Persisted query loader must return query string or instance of GraphQL\Language\AST\DocumentNode '
-            . 'but got: {"err":"err"}'
+            'Persisted query loader must return query string or instance of GraphQL\Language\AST\DocumentNode but got: {"err":"err"}'
         ));
         $this->executePersistedQuery('some-id');
     }
@@ -413,7 +420,7 @@ class QueryExecutionTest extends ServerTestCase
                 ],
             ],
         ];
-        self::assertEquals($expected, $result->toArray());
+        self::assertSame($expected, $result->toArray());
     }
 
     public function testAllowSkippingValidationForPersistedQueries(): void
@@ -434,7 +441,7 @@ class QueryExecutionTest extends ServerTestCase
         $expected = [
             'data' => [],
         ];
-        self::assertEquals($expected, $result->toArray());
+        self::assertSame($expected, $result->toArray());
 
         $result = $this->executePersistedQuery('some-other-id');
         $expected = [
@@ -445,18 +452,25 @@ class QueryExecutionTest extends ServerTestCase
                 ],
             ],
         ];
-        self::assertEquals($expected, $result->toArray());
+        self::assertSame($expected, $result->toArray());
     }
 
-    public function testExecutesQueryWhenQueryAndQueryIdArePassed(): void
+    public function testLoadsPersistedQueryWhenQueryAndQueryIdArePassed(): void
     {
         $query = /** @lang GraphQL */ '{ f1 }';
 
         $expected = [
-            'data' => ['f1' => 'f1'],
+            'errors' => [
+                [
+                    'message' => 'Cannot query field "invalid" on type "Query".',
+                    'locations' => [['line' => 1, 'column' => 3]],
+                ],
+            ],
         ];
-        $this->config->setPersistedQueryLoader(static function (): array {
-            throw new Exception('Should not be called since a query is also passed');
+        $this->config->setPersistedQueryLoader(static function (string $queryId, OperationParams $params) use ($query): string {
+            self::assertSame($query, $params->query);
+
+            return /** @lang GraphQL */ '{ invalid }';
         });
 
         $this->assertQueryResultEquals($expected, $query, [], 'some-id');
@@ -465,7 +479,7 @@ class QueryExecutionTest extends ServerTestCase
     public function testProhibitsUnexpectedValidationRules(): void
     {
         // @phpstan-ignore-next-line purposefully wrong
-        $this->config->setValidationRules(static fn (): stdClass => new stdClass());
+        $this->config->setValidationRules(static fn (): \stdClass => new \stdClass());
 
         $this->expectExceptionObject(new InvariantViolation(
             'Expecting validation rules to be array or callable returning array, but got: instance of stdClass'
@@ -553,7 +567,7 @@ class QueryExecutionTest extends ServerTestCase
             'load: 2',
             'load: 3',
         ];
-        self::assertEquals($expectedCalls, $calls);
+        self::assertSame($expectedCalls, $calls);
 
         $expected = [
             [
@@ -567,9 +581,9 @@ class QueryExecutionTest extends ServerTestCase
             ],
         ];
 
-        self::assertEquals($expected[0], $result[0]->toArray());
-        self::assertEquals($expected[1], $result[1]->toArray());
-        self::assertEquals($expected[2], $result[2]->toArray());
+        self::assertSame($expected[0], $result[0]->toArray());
+        self::assertSame($expected[1], $result[1]->toArray());
+        self::assertSame($expected[2], $result[2]->toArray());
     }
 
     public function testValidatesParamsBeforeExecution(): void
@@ -582,13 +596,13 @@ class QueryExecutionTest extends ServerTestCase
         self::assertEquals(null, $result->data);
         self::assertCount(1, $result->errors);
 
-        self::assertEquals(
+        self::assertSame(
             'GraphQL Request must include at least one of those two parameters: "query" or "queryId"',
             $result->errors[0]->getMessage()
         );
 
         self::assertInstanceOf(
-            RequestError::class,
+            MissingQueryOrQueryIdParameter::class,
             $result->errors[0]->getPrevious()
         );
     }
@@ -607,10 +621,10 @@ class QueryExecutionTest extends ServerTestCase
 
         self::assertFalse($called);
         $this->executeQuery('{f1}');
-        self::assertTrue($called);
+        self::assertTrue($called); // @phpstan-ignore-line value is mutable
         self::assertInstanceOf(OperationParams::class, $params);
         self::assertInstanceOf(DocumentNode::class, $doc);
-        self::assertEquals('query', $operationType);
+        self::assertSame('query', $operationType);
     }
 
     public function testAllowsRootValueAsClosure(): void
@@ -627,10 +641,10 @@ class QueryExecutionTest extends ServerTestCase
 
         self::assertFalse($called);
         $this->executeQuery('{f1}');
-        self::assertTrue($called);
+        self::assertTrue($called); // @phpstan-ignore-line value is mutable
         self::assertInstanceOf(OperationParams::class, $params);
         self::assertInstanceOf(DocumentNode::class, $doc);
-        self::assertEquals('query', $operationType);
+        self::assertSame('query', $operationType);
     }
 
     public function testAppliesErrorFormatter(): void
@@ -653,7 +667,7 @@ class QueryExecutionTest extends ServerTestCase
                 $formattedError,
             ],
         ];
-        self::assertTrue($called);
+        self::assertTrue($called); // @phpstan-ignore-line value is mutable
         self::assertArraySubset($expected, $formatted);
         self::assertInstanceOf(Error::class, $error);
 
@@ -697,7 +711,7 @@ class QueryExecutionTest extends ServerTestCase
         $expected = [
             'errors' => $handledErrors,
         ];
-        self::assertTrue($called);
+        self::assertTrue($called); // @phpstan-ignore-line value is mutable
         self::assertArraySubset($expected, $formatted);
         self::assertIsArray($errors);
         self::assertCount(2, $errors);

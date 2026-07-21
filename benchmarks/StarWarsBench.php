@@ -8,10 +8,14 @@ use GraphQL\Type\Introspection;
 
 /**
  * @BeforeMethods({"setIntroQuery"})
+ *
  * @OutputTimeUnit("milliseconds", precision=3)
- * @Warmup(2)
- * @Revs(10)
- * @Iterations(2)
+ *
+ * @Warmup(5)
+ *
+ * @Revs(100)
+ *
+ * @Iterations(10)
  */
 class StarWarsBench
 {
