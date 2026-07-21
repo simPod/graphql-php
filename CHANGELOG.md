@@ -13,6 +13,12 @@ You can find and compare releases at the [GitHub release page](https://github.co
 
 - Allow setting per-schema built-in scalar overrides explicitly via `SchemaConfig` option `scalarOverrides`, avoiding the resolution of lazily provided `types` on built-in scalar lookups https://github.com/webonyx/graphql-php/pull/1927
 
+## v15.34.1
+
+### Fixed
+
+- Preserve `deprecationReason` when rebuilding input values from introspection in `BuildClientSchema` https://github.com/webonyx/graphql-php/pull/1945
+
 ## v15.34.0
 
 ### Added
