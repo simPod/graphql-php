@@ -9,6 +9,12 @@ You can find and compare releases at the [GitHub release page](https://github.co
 
 ## Unreleased
 
+## v15.34.1
+
+### Fixed
+
+- Preserve `deprecationReason` when rebuilding input values from introspection in `BuildClientSchema` https://github.com/webonyx/graphql-php/pull/1945
+
 ## v15.34.0
 
 ### Added
