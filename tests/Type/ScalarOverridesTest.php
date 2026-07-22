@@ -685,26 +685,46 @@ final class ScalarOverridesTest extends TestCase
         self::assertNull($config->getScalarOverrides());
     }
 
-    public function testSetScalarOverridesRejectsNonScalarTypes(): void
+    public function testSetScalarOverridesAssertsScalarTypesAtDevelopmentTime(): void
     {
         $config = new SchemaConfig();
 
-        $this->expectException(InvariantViolation::class);
+        $this->expectException(\AssertionError::class);
         // @phpstan-ignore-next-line intentionally wrong
         $config->setScalarOverrides([self::createQueryType()]);
     }
 
-    public function testSetScalarOverridesRejectsNonBuiltInScalarNames(): void
+    public function testSchemaValidationRejectsNonBuiltInScalarNames(): void
     {
         $customScalar = new CustomScalarType([
             'name' => 'DateTime',
             'serialize' => static fn ($value): string => (string) $value,
         ]);
 
-        $config = new SchemaConfig();
+        $schema = new Schema([
+            'query' => self::createQueryType(),
+            'scalarOverrides' => [$customScalar],
+        ]);
 
-        $this->expectException(InvariantViolation::class);
-        $config->setScalarOverrides([$customScalar]);
+        $errors = $schema->validate();
+
+        self::assertCount(1, $errors);
+        self::assertStringContainsString('named after a built-in scalar', $errors[0]->getMessage());
+    }
+
+    public function testSchemaValidationRejectsNonScalarOverridesSetViaPublicProperty(): void
+    {
+        $config = SchemaConfig::create()->setQuery(self::createQueryType());
+        // Bypass the setter's normalization to simulate direct misuse of the public property.
+        // @phpstan-ignore-next-line intentionally wrong
+        $config->scalarOverrides = [self::createQueryType()];
+
+        $schema = new Schema($config);
+
+        $errors = $schema->validate();
+
+        self::assertCount(1, $errors);
+        self::assertStringContainsString('instanceof', $errors[0]->getMessage());
     }
 
     /** @see https://github.com/webonyx/graphql-php/issues/1874 */

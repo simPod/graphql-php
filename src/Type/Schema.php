@@ -620,6 +620,7 @@ class Schema
         // Validate the schema, producing a list of errors.
         $context = new SchemaValidationContext($this);
         $context->validateRootTypes();
+        $context->validateScalarOverrides();
         $context->validateDirectives();
         $context->validateTypes();
 

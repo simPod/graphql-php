@@ -282,9 +282,10 @@ class SchemaConfig
     }
 
     /**
-     * @param array<ScalarType>|null $scalarOverrides
+     * Deeper validation (that each override is a ScalarType named after a built-in scalar)
+     * runs during schema validation, see SchemaValidationContext::validateScalarOverrides().
      *
-     * @throws InvariantViolation
+     * @param array<ScalarType>|null $scalarOverrides
      *
      * @api
      */
@@ -298,17 +299,12 @@ class SchemaConfig
 
         $this->scalarOverrides = [];
         foreach ($scalarOverrides as $scalarOverride) {
+            // Deeper validation (correct scalar names, actually being a ScalarType) happens
+            // during schema validation, see SchemaValidationContext::validateScalarOverrides().
+            // This assertion just catches basic misuse at development time and narrows the type
+            // for the name-keyed map below.
             // @phpstan-ignore-next-line not strictly enforceable unless PHP gets generics
-            if (! $scalarOverride instanceof ScalarType) {
-                $scalarTypeClass = ScalarType::class;
-                $notScalarType = Utils::printSafe($scalarOverride);
-                throw new InvariantViolation("Expected instanceof {$scalarTypeClass}, got: {$notScalarType}.");
-            }
-
-            if (! Type::isBuiltInScalarName($scalarOverride->name)) {
-                $builtInScalarNames = implode(', ', Type::BUILT_IN_SCALAR_NAMES);
-                throw new InvariantViolation("Expected scalar override to be named after a built-in scalar ({$builtInScalarNames}), got: {$scalarOverride->name}.");
-            }
+            assert($scalarOverride instanceof ScalarType, 'Expected instanceof ' . ScalarType::class . ', got: ' . Utils::printSafe($scalarOverride));
 
             $this->scalarOverrides[$scalarOverride->name] = $scalarOverride;
         }
