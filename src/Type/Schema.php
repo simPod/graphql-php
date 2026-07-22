@@ -374,7 +374,7 @@ class Schema
     {
         if ($this->scalarOverrides === null) {
             // When overrides are given explicitly, the scan of types is unnecessary.
-            // This keeps a lazily provided types callable unresolved, see https://github.com/webonyx/graphql-php/issues/1874.
+            // This keeps a lazily provided types callable unresolved, see https://github.com/nuwave/lighthouse/issues/2771.
             $explicitScalarOverrides = $this->config->scalarOverrides;
             if ($explicitScalarOverrides !== null) {
                 return $this->scalarOverrides = $explicitScalarOverrides;
