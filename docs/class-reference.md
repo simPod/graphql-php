@@ -923,9 +923,10 @@ function getScalarOverrides(): ?array
 
 ```php
 /**
- * @param array<ScalarType>|null $scalarOverrides
+ * Deeper validation (that each override is a ScalarType named after a built-in scalar)
+ * runs during schema validation, see SchemaValidationContext::validateScalarOverrides().
  *
- * @throws InvariantViolation
+ * @param array<ScalarType>|null $scalarOverrides
  *
  * @api
  */
