@@ -112,6 +112,38 @@ final class AmpFutureAdapterTest extends TestCase
         $resultPromise->adoptedPromise->await();
     }
 
+    public function testThenRejectsWhenNoRejectionCallbackIsProvided(): void
+    {
+        $ampAdapter = new AmpFutureAdapter();
+        $promise = $ampAdapter->convertThenable(Future::error(new \RuntimeException('failed')));
+        $resultPromise = $ampAdapter->then($promise);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('failed');
+
+        $resultPromise->adoptedPromise->await();
+    }
+
+    public function testThenRejectsWhenRejectionCallbackThrows(): void
+    {
+        $ampAdapter = new AmpFutureAdapter();
+        $promise = $ampAdapter->convertThenable(Future::error(new \RuntimeException('failed')));
+        $resultPromise = $ampAdapter->then(
+            $promise,
+            null,
+            static function (\Throwable $reason): void {
+                self::assertSame('failed', $reason->getMessage());
+
+                throw new \RuntimeException('rejection failed');
+            }
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('rejection failed');
+
+        $resultPromise->adoptedPromise->await();
+    }
+
     public function testCreate(): void
     {
         $ampAdapter = new AmpFutureAdapter();
@@ -128,6 +160,31 @@ final class AmpFutureAdapterTest extends TestCase
         $resultPromise->adoptedPromise->await();
 
         self::assertSame(1, $result);
+    }
+
+    public function testCreateUnwrapsPromise(): void
+    {
+        $ampAdapter = new AmpFutureAdapter();
+        $nestedPromise = $ampAdapter->createFulfilled(1);
+        $promise = $ampAdapter->create(static function ($resolve) use ($nestedPromise): void {
+            $resolve($nestedPromise);
+        });
+
+        self::assertSame(1, $promise->adoptedPromise->await());
+    }
+
+    public function testCreateRejectsWhenNestedFutureFails(): void
+    {
+        $ampAdapter = new AmpFutureAdapter();
+        $future = Future::error(new \RuntimeException('failed'));
+        $promise = $ampAdapter->create(static function ($resolve) use ($future): void {
+            $resolve($future);
+        });
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('failed');
+
+        $promise->adoptedPromise->await();
     }
 
     public function testCreateFulfilled(): void
@@ -224,6 +281,20 @@ final class AmpFutureAdapterTest extends TestCase
         ], $result);
     }
 
+    public function testAllAcceptsPromisesInIterables(): void
+    {
+        $ampAdapter = new AmpFutureAdapter();
+        $promise = $ampAdapter->createFulfilled(1);
+        $promises = (static function () use ($promise): \Generator {
+            yield 'promise' => $promise;
+            yield 'future' => Future::complete(2);
+        })();
+
+        $allPromise = $ampAdapter->all($promises);
+
+        self::assertSame(['promise' => 1, 'future' => 2], $allPromise->adoptedPromise->await());
+    }
+
     public function testAllRejectsWhenOneFutureFails(): void
     {
         $ampAdapter = new AmpFutureAdapter();
@@ -255,5 +326,32 @@ final class AmpFutureAdapterTest extends TestCase
         $this->expectExceptionMessage('failed');
 
         $allPromise->adoptedPromise->await();
+    }
+
+    public function testAllIgnoresOtherFuturesAfterRejection(): void
+    {
+        $ampAdapter = new AmpFutureAdapter();
+        $rejected = new DeferredFuture();
+        $resolved = new DeferredFuture();
+        $alsoRejected = new DeferredFuture();
+        $allPromise = $ampAdapter->all([
+            $rejected->getFuture(),
+            $resolved->getFuture(),
+            $alsoRejected->getFuture(),
+        ]);
+
+        $rejected->error(new \RuntimeException('failed'));
+
+        try {
+            $allPromise->adoptedPromise->await();
+            self::fail('Expected aggregate rejection.');
+        } catch (\RuntimeException $exception) {
+            self::assertSame('failed', $exception->getMessage());
+        }
+
+        $resolved->complete('resolved');
+        $alsoRejected->error(new \RuntimeException('also failed'));
+
+        async(static function (): void {})->await();
     }
 }
