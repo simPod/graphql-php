@@ -72,6 +72,38 @@ final class AmpFutureAdapterTest extends TestCase
         self::assertSame(1, $result);
     }
 
+    public function testThenUnwrapsFutureReturnedByFulfillmentCallback(): void
+    {
+        $ampAdapter = new AmpFutureAdapter();
+        $deferred = new DeferredFuture();
+        $promise = $ampAdapter->convertThenable(Future::complete(1));
+
+        $resultPromise = $ampAdapter->then($promise, static fn (): Future => $deferred->getFuture());
+
+        $deferred->complete(2);
+
+        self::assertSame(2, $resultPromise->adoptedPromise->await());
+    }
+
+    public function testThenDoesNotInvokeRejectionCallbackForFulfillmentCallbackException(): void
+    {
+        $ampAdapter = new AmpFutureAdapter();
+        $promise = $ampAdapter->convertThenable(Future::complete());
+
+        $resultPromise = $ampAdapter->then(
+            $promise,
+            static function (): void {
+                throw new \RuntimeException('fulfillment failed');
+            },
+            static fn (): string => 'recovered'
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('fulfillment failed');
+
+        $resultPromise->adoptedPromise->await();
+    }
+
     public function testCreate(): void
     {
         $ampAdapter = new AmpFutureAdapter();
@@ -126,6 +158,23 @@ final class AmpFutureAdapterTest extends TestCase
         self::assertSame('I am a bad promise', $exception->getMessage());
     }
 
+    public function testThenUnwrapsFutureReturnedByRejectionCallback(): void
+    {
+        $ampAdapter = new AmpFutureAdapter();
+        $deferred = new DeferredFuture();
+        $promise = $ampAdapter->convertThenable(Future::error(new \RuntimeException('failed')));
+
+        $resultPromise = $ampAdapter->then(
+            $promise,
+            null,
+            static fn (): Future => $deferred->getFuture()
+        );
+
+        $deferred->complete('recovered');
+
+        self::assertSame('recovered', $resultPromise->adoptedPromise->await());
+    }
+
     public function testAll(): void
     {
         $ampAdapter = new AmpFutureAdapter();
@@ -138,11 +187,16 @@ final class AmpFutureAdapterTest extends TestCase
         self::assertSame([1, 2, 3], $result);
     }
 
-    public function testAllShouldPreserveTheOrderOfTheArrayWhenResolvingAsyncPromises(): void
+    public function testAllShouldPreserveKeysWhenResolvingAsyncPromises(): void
     {
         $ampAdapter = new AmpFutureAdapter();
         $deferred = new DeferredFuture();
-        $promises = [Future::complete(1), 2, $deferred->getFuture(), Future::complete(4)];
+        $promises = [
+            'first' => Future::complete(1),
+            'second' => 2,
+            'third' => $deferred->getFuture(),
+            'fourth' => Future::complete(4),
+        ];
 
         $allPromise = $ampAdapter->all($promises);
 
@@ -150,6 +204,28 @@ final class AmpFutureAdapterTest extends TestCase
 
         $result = $allPromise->adoptedPromise->await();
 
-        self::assertSame([1, 2, 3, 4], $result);
+        self::assertSame([
+            'first' => 1,
+            'second' => 2,
+            'third' => 3,
+            'fourth' => 4,
+        ], $result);
+    }
+
+    public function testAllRejectsWhenOneFutureFails(): void
+    {
+        $ampAdapter = new AmpFutureAdapter();
+        $deferred = new DeferredFuture();
+        $allPromise = $ampAdapter->all([
+            'resolved' => Future::complete(1),
+            'rejected' => $deferred->getFuture(),
+        ]);
+
+        $deferred->error(new \RuntimeException('failed'));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('failed');
+
+        $allPromise->adoptedPromise->await();
     }
 }

@@ -8,9 +8,6 @@ use GraphQL\Error\InvariantViolation;
 use GraphQL\Executor\Promise\Promise;
 use GraphQL\Executor\Promise\PromiseAdapter;
 
-use function Amp\async;
-use function Amp\Future\await;
-
 /**
  * Allows integration with amphp/amp v3 (fiber-based futures).
  *
@@ -46,25 +43,32 @@ class AmpFutureAdapter implements PromiseAdapter
     {
         $future = $promise->adoptedPromise;
 
-        $next = async(static function () use ($future, $onFulfilled, $onRejected) {
-            try {
-                $value = $future->await();
-            } catch (\Throwable $reason) {
+        $deferred = new DeferredFuture();
+
+        $future
+            ->map(static function ($value) use ($deferred, $onFulfilled): void {
+                try {
+                    static::resolveDeferred($deferred, $onFulfilled === null ? $value : $onFulfilled($value));
+                } catch (\Throwable $exception) {
+                    $deferred->error($exception);
+                }
+            })
+            ->catch(static function (\Throwable $exception) use ($deferred, $onRejected): void {
                 if ($onRejected === null) {
-                    throw $reason;
+                    $deferred->error($exception);
+
+                    return;
                 }
 
-                return static::unwrapResult($onRejected($reason));
-            }
+                try {
+                    static::resolveDeferred($deferred, $onRejected($exception));
+                } catch (\Throwable $exception) {
+                    $deferred->error($exception);
+                }
+            })
+            ->ignore();
 
-            if ($onFulfilled === null) {
-                return $value;
-            }
-
-            return static::unwrapResult($onFulfilled($value));
-        });
-
-        return new Promise($next, $this);
+        return new Promise($deferred->getFuture(), $this);
     }
 
     /** @throws InvariantViolation */
@@ -127,8 +131,9 @@ class AmpFutureAdapter implements PromiseAdapter
             ? $promisesOrValues
             : iterator_to_array($promisesOrValues);
 
-        /** @var array<Future<mixed>> $futures */
-        $futures = [];
+        $deferred = new DeferredFuture();
+        $remaining = 0;
+        $settled = false;
 
         foreach ($items as $key => $item) {
             if ($item instanceof Promise) {
@@ -136,21 +141,40 @@ class AmpFutureAdapter implements PromiseAdapter
             }
 
             if ($item instanceof Future) {
-                $futures[$key] = $item;
+                ++$remaining;
+                $item
+                    ->map(static function ($value) use (&$items, $key, $deferred, &$remaining, &$settled): void {
+                        if ($settled) {
+                            return;
+                        }
+
+                        $items[$key] = $value;
+                        --$remaining;
+                        if ($remaining !== 0) {
+                            return;
+                        }
+
+                        $settled = true;
+                        $deferred->complete($items);
+                    })
+                    ->catch(static function (\Throwable $exception) use ($deferred, &$settled): void {
+                        if ($settled) {
+                            return;
+                        }
+
+                        $settled = true;
+                        $deferred->error($exception);
+                    })
+                    ->ignore();
             }
         }
 
-        $combined = async(static function () use ($items, $futures): array {
-            if ($futures === []) {
-                return $items;
-            }
+        if ($remaining === 0) {
+            $settled = true;
+            $deferred->complete($items);
+        }
 
-            $resolved = await($futures);
-
-            return array_replace($items, $resolved);
-        });
-
-        return new Promise($combined, $this);
+        return new Promise($deferred->getFuture(), $this);
     }
 
     /**
@@ -164,35 +188,18 @@ class AmpFutureAdapter implements PromiseAdapter
         }
 
         if ($value instanceof Future) {
-            async(static function () use ($deferred, $value): void {
-                try {
-                    $deferred->complete($value->await());
-                } catch (\Throwable $exception) {
+            $value
+                ->map(static function ($value) use ($deferred): void {
+                    $deferred->complete($value);
+                })
+                ->catch(static function (\Throwable $exception) use ($deferred): void {
                     $deferred->error($exception);
-                }
-            });
+                })
+                ->ignore();
 
             return;
         }
 
         $deferred->complete($value);
-    }
-
-    /**
-     * @param mixed $value
-     *
-     * @return mixed
-     */
-    protected static function unwrapResult($value)
-    {
-        if ($value instanceof Promise) {
-            $value = $value->adoptedPromise;
-        }
-
-        if ($value instanceof Future) {
-            return $value->await();
-        }
-
-        return $value;
     }
 }
