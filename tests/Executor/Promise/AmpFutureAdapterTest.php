@@ -240,4 +240,20 @@ final class AmpFutureAdapterTest extends TestCase
 
         $allPromise->adoptedPromise->await();
     }
+
+    public function testAllRemainsRejectedWhenAnotherFutureResolves(): void
+    {
+        $ampAdapter = new AmpFutureAdapter();
+        $rejected = new DeferredFuture();
+        $resolved = new DeferredFuture();
+        $allPromise = $ampAdapter->all([$rejected->getFuture(), $resolved->getFuture()]);
+
+        $rejected->error(new \RuntimeException('failed'));
+        $resolved->complete('resolved');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('failed');
+
+        $allPromise->adoptedPromise->await();
+    }
 }

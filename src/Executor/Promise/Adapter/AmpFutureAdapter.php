@@ -45,15 +45,16 @@ class AmpFutureAdapter implements PromiseAdapter
 
         $deferred = new DeferredFuture();
 
-        $future
-            ->map(static function ($value) use ($deferred, $onFulfilled): void {
+        static::observeFuture(
+            $future,
+            static function ($value) use ($deferred, $onFulfilled): void {
                 try {
                     static::resolveDeferred($deferred, $onFulfilled === null ? $value : $onFulfilled($value));
                 } catch (\Throwable $fulfillmentException) {
                     $deferred->error($fulfillmentException);
                 }
-            })
-            ->catch(static function (\Throwable $exception) use ($deferred, $onRejected): void {
+            },
+            static function (\Throwable $exception) use ($deferred, $onRejected): void {
                 if ($onRejected === null) {
                     $deferred->error($exception);
 
@@ -65,8 +66,8 @@ class AmpFutureAdapter implements PromiseAdapter
                 } catch (\Throwable $rejectionException) {
                     $deferred->error($rejectionException);
                 }
-            })
-            ->ignore();
+            }
+        );
 
         return new Promise($deferred->getFuture(), $this);
     }
@@ -132,8 +133,8 @@ class AmpFutureAdapter implements PromiseAdapter
             : iterator_to_array($promisesOrValues);
 
         $deferred = new DeferredFuture();
+        $resultFuture = $deferred->getFuture();
         $remaining = 0;
-        $settled = false;
 
         foreach ($items as $key => $item) {
             if ($item instanceof Promise) {
@@ -142,9 +143,10 @@ class AmpFutureAdapter implements PromiseAdapter
 
             if ($item instanceof Future) {
                 ++$remaining;
-                $item
-                    ->map(static function ($value) use (&$items, $key, $deferred, &$remaining, &$settled): void {
-                        if ($settled) {
+                static::observeFuture(
+                    $item,
+                    static function ($value) use (&$items, $key, $deferred, $resultFuture, &$remaining): void {
+                        if ($resultFuture->isComplete()) {
                             return;
                         }
 
@@ -154,27 +156,24 @@ class AmpFutureAdapter implements PromiseAdapter
                             return;
                         }
 
-                        $settled = true;
                         $deferred->complete($items);
-                    })
-                    ->catch(static function (\Throwable $exception) use ($deferred, &$settled): void {
-                        if ($settled) {
+                    },
+                    static function (\Throwable $exception) use ($deferred, $resultFuture): void {
+                        if ($resultFuture->isComplete()) {
                             return;
                         }
 
-                        $settled = true;
                         $deferred->error($exception);
-                    })
-                    ->ignore();
+                    }
+                );
             }
         }
 
-        if ($remaining === 0) {
-            $settled = true;
+        if ($remaining === 0 && ! $resultFuture->isComplete()) {
             $deferred->complete($items);
         }
 
-        return new Promise($deferred->getFuture(), $this);
+        return new Promise($resultFuture, $this);
     }
 
     /**
@@ -188,18 +187,38 @@ class AmpFutureAdapter implements PromiseAdapter
         }
 
         if ($value instanceof Future) {
-            $value
-                ->map(static function ($value) use ($deferred): void {
+            static::observeFuture(
+                $value,
+                static function ($value) use ($deferred): void {
                     $deferred->complete($value);
-                })
-                ->catch(static function (\Throwable $exception) use ($deferred): void {
+                },
+                static function (\Throwable $exception) use ($deferred): void {
                     $deferred->error($exception);
-                })
-                ->ignore();
+                }
+            );
 
             return;
         }
 
         $deferred->complete($value);
+    }
+
+    /**
+     * @template T
+     *
+     * @param Future<T> $future
+     * @param \Closure(T): void $onFulfilled
+     * @param \Closure(\Throwable): void $onRejected
+     */
+    protected static function observeFuture(Future $future, \Closure $onFulfilled, \Closure $onRejected): void
+    {
+        $future
+            ->map(static function ($value) use ($onFulfilled): void {
+                $onFulfilled($value);
+            })
+            ->catch(static function (\Throwable $exception) use ($onRejected): void {
+                $onRejected($exception);
+            })
+            ->ignore();
     }
 }
