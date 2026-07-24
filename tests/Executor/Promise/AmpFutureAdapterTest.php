@@ -101,7 +101,7 @@ final class AmpFutureAdapterTest extends TestCase
 
                 throw new \RuntimeException('fulfillment failed');
             },
-            static function (\Throwable $reason): string {
+            static function (\Throwable $reason): void {
                 self::fail('The rejection callback must not run for a fulfillment callback exception.');
             }
         );

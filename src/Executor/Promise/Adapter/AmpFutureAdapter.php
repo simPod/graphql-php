@@ -49,8 +49,8 @@ class AmpFutureAdapter implements PromiseAdapter
             ->map(static function ($value) use ($deferred, $onFulfilled): void {
                 try {
                     static::resolveDeferred($deferred, $onFulfilled === null ? $value : $onFulfilled($value));
-                } catch (\Throwable $exception) {
-                    $deferred->error($exception);
+                } catch (\Throwable $fulfillmentException) {
+                    $deferred->error($fulfillmentException);
                 }
             })
             ->catch(static function (\Throwable $exception) use ($deferred, $onRejected): void {
@@ -62,8 +62,8 @@ class AmpFutureAdapter implements PromiseAdapter
 
                 try {
                     static::resolveDeferred($deferred, $onRejected($exception));
-                } catch (\Throwable $exception) {
-                    $deferred->error($exception);
+                } catch (\Throwable $rejectionException) {
+                    $deferred->error($rejectionException);
                 }
             })
             ->ignore();
