@@ -78,7 +78,11 @@ final class AmpFutureAdapterTest extends TestCase
         $deferred = new DeferredFuture();
         $promise = $ampAdapter->convertThenable(Future::complete(1));
 
-        $resultPromise = $ampAdapter->then($promise, static fn (): Future => $deferred->getFuture());
+        $resultPromise = $ampAdapter->then($promise, static function ($value) use ($deferred): Future {
+            self::assertSame(1, $value);
+
+            return $deferred->getFuture();
+        });
 
         $deferred->complete(2);
 
@@ -92,10 +96,14 @@ final class AmpFutureAdapterTest extends TestCase
 
         $resultPromise = $ampAdapter->then(
             $promise,
-            static function (): void {
+            static function ($value): void {
+                self::assertNull($value);
+
                 throw new \RuntimeException('fulfillment failed');
             },
-            static fn (): string => 'recovered'
+            static function (\Throwable $reason): string {
+                self::fail('The rejection callback must not run for a fulfillment callback exception.');
+            }
         );
 
         $this->expectException(\RuntimeException::class);
@@ -167,7 +175,11 @@ final class AmpFutureAdapterTest extends TestCase
         $resultPromise = $ampAdapter->then(
             $promise,
             null,
-            static fn (): Future => $deferred->getFuture()
+            static function (\Throwable $reason) use ($deferred): Future {
+                self::assertSame('failed', $reason->getMessage());
+
+                return $deferred->getFuture();
+            }
         );
 
         $deferred->complete('recovered');
