@@ -219,11 +219,11 @@ class AmpFutureAdapter implements PromiseAdapter
     {
         if (self::subscribe(
             $future,
-            static function (?\Throwable $error, mixed $value) use ($onFulfilled, $onRejected): void {
+            static function (?\Throwable $error, $value) use ($onFulfilled, $onRejected): void {
                 if ($error !== null) {
                     try {
                         $onRejected($error);
-                    } catch (\Throwable) {
+                    } catch (\Throwable $ignored) {
                         // Matches the ignored rejected Future in the previous implementation.
                     }
 
@@ -235,7 +235,7 @@ class AmpFutureAdapter implements PromiseAdapter
                 } catch (\Throwable $exception) {
                     try {
                         $onRejected($exception);
-                    } catch (\Throwable) {
+                    } catch (\Throwable $ignored) {
                         // Matches the ignored rejected Future in the previous implementation.
                     }
                 }

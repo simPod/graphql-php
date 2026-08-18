@@ -8,3 +8,10 @@ parameters:
         # Native enums require PHP 8.1, but checking if a value is of an unknown class still works
         - path: ../src/Type/Definition/EnumType.php
           identifier: class.notFound
+
+        # Future::subscribe() is optional until amphp/amp releases it, so PHPStan's
+        # PHP 7.4 baseline cannot infer the subscribed Future value type.
+        - path: ../src/Executor/Promise/Adapter/AmpFutureAdapter.php
+          identifier: argument.type
+          message: "#Parameter #1 of closure expects T, mixed given.#"
+          count: 1
