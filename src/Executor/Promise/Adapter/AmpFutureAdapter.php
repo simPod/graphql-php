@@ -217,13 +217,26 @@ class AmpFutureAdapter implements PromiseAdapter
      */
     protected static function observeFuture(Future $future, \Closure $onFulfilled, \Closure $onRejected): void
     {
-        $future
-            ->map(static function ($value) use ($onFulfilled): void {
+        $future->subscribe(static function (?\Throwable $error, mixed $value) use ($onFulfilled, $onRejected): void {
+            if ($error !== null) {
+                try {
+                    $onRejected($error);
+                } catch (\Throwable) {
+                    // Matches the ignored rejected Future in the previous implementation.
+                }
+
+                return;
+            }
+
+            try {
                 $onFulfilled($value);
-            })
-            ->catch(static function (\Throwable $exception) use ($onRejected): void {
-                $onRejected($exception);
-            })
-            ->ignore();
+            } catch (\Throwable $exception) {
+                try {
+                    $onRejected($exception);
+                } catch (\Throwable) {
+                    // Matches the ignored rejected Future in the previous implementation.
+                }
+            }
+        });
     }
 }
