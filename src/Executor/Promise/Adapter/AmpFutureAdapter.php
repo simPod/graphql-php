@@ -217,26 +217,51 @@ class AmpFutureAdapter implements PromiseAdapter
      */
     protected static function observeFuture(Future $future, \Closure $onFulfilled, \Closure $onRejected): void
     {
-        $future->subscribe(static function (?\Throwable $error, mixed $value) use ($onFulfilled, $onRejected): void {
-            if ($error !== null) {
-                try {
-                    $onRejected($error);
-                } catch (\Throwable) {
-                    // Matches the ignored rejected Future in the previous implementation.
+        if (self::subscribe(
+            $future,
+            static function (?\Throwable $error, mixed $value) use ($onFulfilled, $onRejected): void {
+                if ($error !== null) {
+                    try {
+                        $onRejected($error);
+                    } catch (\Throwable) {
+                        // Matches the ignored rejected Future in the previous implementation.
+                    }
+
+                    return;
                 }
 
-                return;
+                try {
+                    $onFulfilled($value);
+                } catch (\Throwable $exception) {
+                    try {
+                        $onRejected($exception);
+                    } catch (\Throwable) {
+                        // Matches the ignored rejected Future in the previous implementation.
+                    }
+                }
             }
+        )) {
+            return;
+        }
 
-            try {
+        $future
+            ->map(static function ($value) use ($onFulfilled): void {
                 $onFulfilled($value);
-            } catch (\Throwable $exception) {
-                try {
-                    $onRejected($exception);
-                } catch (\Throwable) {
-                    // Matches the ignored rejected Future in the previous implementation.
-                }
-            }
-        });
+            })
+            ->catch(static function (\Throwable $exception) use ($onRejected): void {
+                $onRejected($exception);
+            })
+            ->ignore();
+    }
+
+    private static function subscribe(object $future, \Closure $callback): bool
+    {
+        if (! method_exists($future, 'subscribe')) {
+            return false;
+        }
+
+        $future->subscribe($callback);
+
+        return true;
     }
 }
