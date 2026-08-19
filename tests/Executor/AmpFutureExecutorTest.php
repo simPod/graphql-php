@@ -110,6 +110,38 @@ final class AmpFutureExecutorTest extends TestCase
         ], $result->data);
     }
 
+    public function testWrappedGraphQLPromiseIsResolvedAsAnAmpFuture(): void
+    {
+        $adapter = new CountingAmpFutureAdapter();
+        $schema = $this->createSchema(
+            static fn (string $id) => $adapter->convertThenable(Future::complete('value-' . $id)),
+        );
+
+        $promise = GraphQL::promiseToExecute(
+            $adapter,
+            $schema,
+            '{ items { id detail } }',
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            [AmpFutureExecutor::class, 'create'],
+        );
+
+        $result = $promise->adoptedPromise->await();
+
+        self::assertSame([], $result->errors);
+        self::assertSame([
+            'items' => [
+                ['id' => 'a', 'detail' => 'value-a'],
+                ['id' => 'b', 'detail' => 'value-b'],
+                ['id' => 'c', 'detail' => 'value-c'],
+            ],
+        ], $result->data);
+    }
+
     public function testRejectedNonNullFutureBubblesToTheNullableParent(): void
     {
         $adapter = new CountingAmpFutureAdapter();
@@ -208,7 +240,7 @@ final class AmpFutureExecutorTest extends TestCase
     }
 
     /**
-     * @param callable(string): Future<string> $detailResolver
+     * @param callable(string): mixed $detailResolver
      *
      * @throws \GraphQL\Error\InvariantViolation
      */
@@ -219,7 +251,7 @@ final class AmpFutureExecutorTest extends TestCase
             'fields' => [
                 'detail' => [
                     'type' => Type::string(),
-                    'resolve' => static fn (array $item): Future => $detailResolver($item['id']),
+                    'resolve' => static fn (array $item) => $detailResolver($item['id']),
                 ],
                 'id' => Type::nonNull(Type::string()),
             ],

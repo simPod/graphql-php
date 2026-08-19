@@ -3,14 +3,11 @@
 namespace GraphQL\Executor;
 
 use Amp\Future;
-use GraphQL\Error\InvariantViolation;
-use GraphQL\Executor\Promise\Adapter\AmpFutureAdapter;
-use GraphQL\Executor\Promise\Promise;
 
 /**
  * @internal
  */
-final class AmpFutureValue extends Promise
+final class AmpFutureValue
 {
     /** @var \Closure(): mixed */
     private \Closure $resolver;
@@ -22,56 +19,22 @@ final class AmpFutureValue extends Promise
 
     private bool $resolved = false;
 
-    private AmpFutureAdapter $adapter;
-
-    /**
-     * @param \Closure(): mixed $resolver
-     *
-     * @throws InvariantViolation
-     */
-    private function __construct(\Closure $resolver, AmpFutureAdapter $adapter)
+    /** @param \Closure(): mixed $resolver */
+    private function __construct(\Closure $resolver)
     {
-        parent::__construct(null, $adapter);
         $this->resolver = $resolver;
-        $this->adapter = $adapter;
     }
 
-    /**
-     * @param \Closure(): mixed $resolver
-     *
-     * @throws InvariantViolation
-     */
-    public static function defer(\Closure $resolver, AmpFutureAdapter $adapter): self
+    /** @param \Closure(): mixed $resolver */
+    public static function defer(\Closure $resolver): self
     {
-        return new self($resolver, $adapter);
+        return new self($resolver);
     }
 
-    /**
-     * @param Future<mixed> $future
-     *
-     * @throws InvariantViolation
-     */
-    public static function fromFuture(Future $future, AmpFutureAdapter $adapter): self
+    /** @param Future<mixed> $future */
+    public static function fromFuture(Future $future): self
     {
-        return new self(static fn () => $future->await(), $adapter);
-    }
-
-    /** @throws InvariantViolation */
-    public function then(?callable $onFulfilled = null, ?callable $onRejected = null): Promise
-    {
-        return self::defer(function () use ($onFulfilled, $onRejected) {
-            try {
-                $value = $this->await();
-
-                return $onFulfilled === null ? $value : $onFulfilled($value);
-            } catch (\Throwable $error) {
-                if ($onRejected === null) {
-                    throw $error;
-                }
-
-                return $onRejected($error);
-            }
-        }, $this->adapter);
+        return new self(static fn () => $future->await());
     }
 
     /** @return mixed */

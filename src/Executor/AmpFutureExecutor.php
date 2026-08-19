@@ -108,7 +108,7 @@ final class AmpFutureExecutor extends ReferenceExecutor
 
                     return null;
                 }
-            }, $this->nativeAdapter());
+            });
         } catch (Error $error) {
             $this->exeContext->addError($error);
 
@@ -159,14 +159,23 @@ final class AmpFutureExecutor extends ReferenceExecutor
         }
 
         return AmpFutureValue::defer(function () use ($results) {
+            $error = null;
             foreach ($results as $responseName => $result) {
                 if ($result instanceof AmpFutureValue) {
-                    $results[$responseName] = $result->await();
+                    try {
+                        $results[$responseName] = $result->await();
+                    } catch (\Throwable $exception) {
+                        $error ??= $exception;
+                    }
                 }
             }
 
+            if ($error !== null) {
+                throw $error;
+            }
+
             return static::fixResultsIfEmptyArray($results);
-        }, $this->nativeAdapter());
+        });
     }
 
     /**
@@ -203,7 +212,7 @@ final class AmpFutureExecutor extends ReferenceExecutor
             }
 
             return static::fixResultsIfEmptyArray($results);
-        }, $this->nativeAdapter());
+        });
     }
 
     /**
@@ -216,7 +225,7 @@ final class AmpFutureExecutor extends ReferenceExecutor
      * @throws Error
      * @throws InvariantViolation
      *
-     * @return array<mixed>|\stdClass|Promise|null
+     * @return array<mixed>|\stdClass|AmpFutureValue|Promise|null
      */
     protected function completeValueCatchingError(
         Type $returnType,
@@ -227,8 +236,9 @@ final class AmpFutureExecutor extends ReferenceExecutor
         $result,
         $contextValue
     ) {
-        if ($result instanceof Future) {
-            $result = AmpFutureValue::fromFuture($result, $this->nativeAdapter());
+        $futureValue = $this->asFutureValue($result);
+        if ($futureValue !== null) {
+            $result = $futureValue;
         }
 
         if ($result instanceof AmpFutureValue) {
@@ -238,7 +248,7 @@ final class AmpFutureExecutor extends ReferenceExecutor
                 } catch (\Throwable $error) {
                     return $this->handleNativeFieldError($error, $fieldNodes, $path, $unaliasedPath, $returnType);
                 }
-            }, $this->nativeAdapter());
+            });
         }
 
         try {
@@ -253,7 +263,7 @@ final class AmpFutureExecutor extends ReferenceExecutor
                 } catch (\Throwable $error) {
                     return $this->handleNativeFieldError($error, $fieldNodes, $path, $unaliasedPath, $returnType);
                 }
-            }, $this->nativeAdapter());
+            });
         } catch (\Throwable $error) {
             return $this->handleNativeFieldError($error, $fieldNodes, $path, $unaliasedPath, $returnType);
         }
@@ -293,8 +303,9 @@ final class AmpFutureExecutor extends ReferenceExecutor
         $result,
         $contextValue
     ) {
-        if ($result instanceof Future) {
-            $result = AmpFutureValue::fromFuture($result, $this->nativeAdapter());
+        $futureValue = $this->asFutureValue($result);
+        if ($futureValue !== null) {
+            $result = $futureValue;
         }
 
         if ($result instanceof AmpFutureValue) {
@@ -306,7 +317,7 @@ final class AmpFutureExecutor extends ReferenceExecutor
                 $unaliasedPath,
                 $result->await(),
                 $contextValue,
-            ), $this->nativeAdapter());
+            ));
         }
 
         return parent::completeValue($returnType, $fieldNodes, $info, $path, $unaliasedPath, $result, $contextValue);
@@ -352,14 +363,23 @@ final class AmpFutureExecutor extends ReferenceExecutor
         }
 
         return AmpFutureValue::defer(function () use ($completedItems) {
+            $error = null;
             foreach ($completedItems as $index => $completedItem) {
                 if ($completedItem instanceof AmpFutureValue) {
-                    $completedItems[$index] = $completedItem->await();
+                    try {
+                        $completedItems[$index] = $completedItem->await();
+                    } catch (\Throwable $exception) {
+                        $error ??= $exception;
+                    }
                 }
             }
 
+            if ($error !== null) {
+                throw $error;
+            }
+
             return $completedItems;
-        }, $this->nativeAdapter());
+        });
     }
 
     /**
@@ -385,12 +405,13 @@ final class AmpFutureExecutor extends ReferenceExecutor
         $runtimeType = $returnType->resolveType($result, $contextValue, $info);
         if ($runtimeType === null) {
             $runtimeType = $this->defaultTypeResolver($result, $contextValue, $info, $returnType);
-        } elseif (! \is_string($runtimeType) && is_callable($runtimeType)) {
+        } elseif (! is_string($runtimeType) && is_callable($runtimeType)) {
             $runtimeType = $runtimeType();
         }
 
-        if ($runtimeType instanceof Future) {
-            $runtimeType = AmpFutureValue::fromFuture($runtimeType, $this->nativeAdapter());
+        $futureValue = $this->asFutureValue($runtimeType);
+        if ($futureValue !== null) {
+            $runtimeType = $futureValue;
         }
 
         if ($runtimeType instanceof AmpFutureValue) {
@@ -402,7 +423,7 @@ final class AmpFutureExecutor extends ReferenceExecutor
                 $unaliasedPath,
                 $result,
                 $contextValue,
-            ), $this->nativeAdapter());
+            ));
         }
 
         return $this->completeObjectValue(
@@ -426,7 +447,7 @@ final class AmpFutureExecutor extends ReferenceExecutor
     protected function defaultTypeResolver($value, $contextValue, ResolveInfo $info, AbstractType $abstractType)
     {
         $typename = Utils::extractKey($value, '__typename');
-        if (\is_string($typename)) {
+        if (is_string($typename)) {
             return $typename;
         }
 
@@ -446,9 +467,9 @@ final class AmpFutureExecutor extends ReferenceExecutor
                 continue;
             }
 
-            $future = $this->asFuture($isTypeOf);
-            if ($future !== null) {
-                $isTypeOfResults[$index] = AmpFutureValue::fromFuture($future, $this->nativeAdapter());
+            $futureValue = $this->asFutureValue($isTypeOf);
+            if ($futureValue !== null) {
+                $isTypeOfResults[$index] = $futureValue;
             } elseif ($isTypeOf === true) {
                 return $type;
             }
@@ -459,14 +480,24 @@ final class AmpFutureExecutor extends ReferenceExecutor
         }
 
         return AmpFutureValue::defer(function () use ($isTypeOfResults, $possibleTypes): ?ObjectType {
+            $error = null;
+            $matchingType = null;
             foreach ($isTypeOfResults as $index => $isTypeOf) {
-                if ($isTypeOf->await() === true) {
-                    return $possibleTypes[$index];
+                try {
+                    if ($isTypeOf->await() === true && $matchingType === null) {
+                        $matchingType = $possibleTypes[$index];
+                    }
+                } catch (\Throwable $exception) {
+                    $error ??= $exception;
                 }
             }
 
-            return null;
-        }, $this->nativeAdapter());
+            if ($error !== null) {
+                throw $error;
+            }
+
+            return $matchingType;
+        });
     }
 
     /**
@@ -488,9 +519,9 @@ final class AmpFutureExecutor extends ReferenceExecutor
         $contextValue
     ) {
         $isTypeOf = $returnType->isTypeOf($result, $contextValue, $info);
-        $future = $this->asFuture($isTypeOf);
-        if ($future !== null) {
-            $isTypeOf = AmpFutureValue::fromFuture($future, $this->nativeAdapter());
+        $futureValue = $this->asFutureValue($isTypeOf);
+        if ($futureValue !== null) {
+            $isTypeOf = $futureValue;
         }
 
         if ($isTypeOf instanceof AmpFutureValue) {
@@ -500,7 +531,7 @@ final class AmpFutureExecutor extends ReferenceExecutor
                 }
 
                 return $this->collectAndExecuteSubfields($returnType, $fieldNodes, $path, $unaliasedPath, $result, $contextValue);
-            }, $this->nativeAdapter());
+            });
         }
 
         assert($isTypeOf === null || is_bool($isTypeOf), 'AmpFutureExecutor requires bool or Future from isTypeOf.');
@@ -524,21 +555,17 @@ final class AmpFutureExecutor extends ReferenceExecutor
         return $contextValue instanceof ScopedContext ? $contextValue->clone() : $contextValue;
     }
 
-    private function nativeAdapter(): AmpFutureAdapter
+    /** @param mixed $value */
+    private function asFutureValue($value): ?AmpFutureValue
     {
-        $adapter = $this->exeContext->promiseAdapter;
-        assert($adapter instanceof AmpFutureAdapter, 'AmpFutureExecutor requires AmpFutureAdapter.');
+        if ($value instanceof AmpFutureValue) {
+            return $value;
+        }
 
-        return $adapter;
-    }
+        if ($value instanceof Promise) {
+            $value = $value->adoptedPromise;
+        }
 
-    /**
-     * @param mixed $value
-     *
-     * @return Future<mixed>|null
-     */
-    private function asFuture($value): ?Future
-    {
-        return $value instanceof Future ? $value : null;
+        return $value instanceof Future ? AmpFutureValue::fromFuture($value) : null;
     }
 }

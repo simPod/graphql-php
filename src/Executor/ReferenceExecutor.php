@@ -291,7 +291,7 @@ class ReferenceExecutor implements ExecutorImplementation
      *
      * @throws \Exception
      *
-     * @return array<mixed>|Promise|\stdClass|null
+     * @return array<mixed>|AmpFutureValue|Promise|\stdClass|null
      */
     protected function executeOperation(OperationDefinitionNode $operation, $rootValue)
     {
@@ -531,7 +531,7 @@ class ReferenceExecutor implements ExecutorImplementation
      *
      * @phpstan-param Fields $fields
      *
-     * @return array<mixed>|Promise|\stdClass
+     * @return array<mixed>|AmpFutureValue|Promise|\stdClass
      */
     protected function executeFieldsSerially(ObjectType $parentType, $rootValue, array $path, array $unaliasedPath, \ArrayObject $fields, $contextValue)
     {
@@ -767,7 +767,7 @@ class ReferenceExecutor implements ExecutorImplementation
      *
      * @throws Error
      *
-     * @return array<mixed>|Promise|\stdClass|null
+     * @return array<mixed>|AmpFutureValue|Promise|\stdClass|null
      */
     protected function completeValueCatchingError(
         Type $returnType,
@@ -861,7 +861,7 @@ class ReferenceExecutor implements ExecutorImplementation
      * @throws \Throwable
      * @throws Error
      *
-     * @return array<mixed>|mixed|Promise|null
+     * @return array<mixed>|AmpFutureValue|mixed|Promise|null
      */
     protected function completeValue(
         Type $returnType,
@@ -1011,7 +1011,7 @@ class ReferenceExecutor implements ExecutorImplementation
      *
      * @throws Error
      *
-     * @return array<mixed>|Promise|\stdClass
+     * @return array<mixed>|AmpFutureValue|Promise|\stdClass
      */
     protected function completeListValue(
         ListOfType $returnType,
@@ -1083,7 +1083,7 @@ class ReferenceExecutor implements ExecutorImplementation
      * @throws Error
      * @throws InvariantViolation
      *
-     * @return array<mixed>|Promise|\stdClass
+     * @return array<mixed>|AmpFutureValue|Promise|\stdClass
      */
     protected function completeAbstractValue(
         AbstractType $returnType,
@@ -1155,7 +1155,7 @@ class ReferenceExecutor implements ExecutorImplementation
      *
      * @throws InvariantViolation
      *
-     * @return Promise|Type|string|null
+     * @return AmpFutureValue|Promise|Type|string|null
      */
     protected function defaultTypeResolver($value, $contextValue, ResolveInfo $info, AbstractType $abstractType)
     {
@@ -1217,7 +1217,7 @@ class ReferenceExecutor implements ExecutorImplementation
      * @throws \Exception
      * @throws Error
      *
-     * @return array<mixed>|Promise|\stdClass
+     * @return array<mixed>|AmpFutureValue|Promise|\stdClass
      */
     protected function completeObjectValue(
         ObjectType $returnType,
@@ -1301,7 +1301,7 @@ class ReferenceExecutor implements ExecutorImplementation
      * @throws \Exception
      * @throws Error
      *
-     * @return array<mixed>|Promise|\stdClass
+     * @return array<mixed>|AmpFutureValue|Promise|\stdClass
      */
     protected function collectAndExecuteSubfields(
         ObjectType $returnType,
@@ -1367,7 +1367,7 @@ class ReferenceExecutor implements ExecutorImplementation
      * @throws Error
      * @throws InvariantViolation
      *
-     * @return Promise|\stdClass|array<mixed>
+     * @return AmpFutureValue|Promise|\stdClass|array<mixed>
      */
     protected function executeFields(ObjectType $parentType, $rootValue, array $path, array $unaliasedPath, \ArrayObject $fields, $contextValue)
     {
