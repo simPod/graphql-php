@@ -118,6 +118,7 @@ class GraphQL
      * @param mixed $context
      * @param array<string, mixed>|null $variableValues
      * @param array<ValidationRule>|null $validationRules Defaults to using all available rules
+     * @param callable|null $implementationFactory Creates the executor for this request
      *
      * @api
      *
@@ -132,7 +133,8 @@ class GraphQL
         ?array $variableValues = null,
         ?string $operationName = null,
         ?callable $fieldResolver = null,
-        ?array $validationRules = null
+        ?array $validationRules = null,
+        ?callable $implementationFactory = null
     ): Promise {
         try {
             $documentNode = $source instanceof DocumentNode
@@ -168,7 +170,9 @@ class GraphQL
                 $context,
                 $variableValues,
                 $operationName,
-                $fieldResolver
+                $fieldResolver,
+                null,
+                $implementationFactory
             );
         } catch (Error $e) {
             return $promiseAdapter->createFulfilled(

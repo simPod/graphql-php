@@ -31,6 +31,7 @@ final class ServerConfigTest extends TestCase
         self::assertNull($config->getErrorFormatter());
         self::assertNull($config->getErrorsHandler());
         self::assertNull($config->getPromiseAdapter());
+        self::assertNull($config->getExecutorImplementationFactory());
         self::assertNull($config->getValidationRules());
         self::assertNull($config->getFieldResolver());
         self::assertNull($config->getPersistedQueryLoader());
@@ -126,6 +127,16 @@ final class ServerConfigTest extends TestCase
         self::assertSame($adapter2, $config->getPromiseAdapter());
     }
 
+    public function testAllowsSettingExecutorImplementationFactory(): void
+    {
+        $config = ServerConfig::create();
+        $factory = static function (): void {};
+
+        $config->setExecutorImplementationFactory($factory);
+
+        self::assertSame($factory, $config->getExecutorImplementationFactory());
+    }
+
     public function testAllowsSettingValidationRules(): void
     {
         $config = ServerConfig::create();
@@ -197,6 +208,7 @@ final class ServerConfigTest extends TestCase
             'context' => new \stdClass(),
             'rootValue' => new \stdClass(),
             'errorFormatter' => static function (): void {},
+            'executorImplementationFactory' => static function (): void {},
             'promiseAdapter' => new SyncPromiseAdapter(),
             'validationRules' => static function (): void {},
             'fieldResolver' => static function (): void {},
@@ -211,6 +223,7 @@ final class ServerConfigTest extends TestCase
         self::assertSame($arr['context'], $config->getContext());
         self::assertSame($arr['rootValue'], $config->getRootValue());
         self::assertSame($arr['errorFormatter'], $config->getErrorFormatter());
+        self::assertSame($arr['executorImplementationFactory'], $config->getExecutorImplementationFactory());
         self::assertSame($arr['promiseAdapter'], $config->getPromiseAdapter());
         self::assertSame($arr['validationRules'], $config->getValidationRules());
         self::assertSame($arr['fieldResolver'], $config->getFieldResolver());

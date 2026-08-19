@@ -167,9 +167,10 @@ class Executor
         ?array $variableValues = null,
         ?string $operationName = null,
         ?callable $fieldResolver = null,
-        ?callable $argsMapper = null
+        ?callable $argsMapper = null,
+        ?callable $implementationFactory = null
     ): Promise {
-        $executor = (self::$implementationFactory)(
+        $executor = ($implementationFactory ?? self::$implementationFactory)(
             $promiseAdapter,
             $schema,
             $documentNode,

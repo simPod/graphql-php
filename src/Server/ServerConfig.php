@@ -85,6 +85,9 @@ class ServerConfig
                 case 'promiseAdapter':
                     $instance->setPromiseAdapter($value);
                     break;
+                case 'executorImplementationFactory':
+                    $instance->setExecutorImplementationFactory($value);
+                    break;
                 default:
                     throw new InvariantViolation("Unknown server config option: {$key}");
             }
@@ -134,6 +137,9 @@ class ServerConfig
     private $fieldResolver;
 
     private ?PromiseAdapter $promiseAdapter = null;
+
+    /** @var callable|null */
+    private $executorImplementationFactory;
 
     /**
      * @var callable|null
@@ -282,6 +288,14 @@ class ServerConfig
         return $this;
     }
 
+    /** @api */
+    public function setExecutorImplementationFactory(?callable $executorImplementationFactory): self
+    {
+        $this->executorImplementationFactory = $executorImplementationFactory;
+
+        return $this;
+    }
+
     /** @return mixed|callable */
     public function getContext()
     {
@@ -318,6 +332,11 @@ class ServerConfig
     public function getPromiseAdapter(): ?PromiseAdapter
     {
         return $this->promiseAdapter;
+    }
+
+    public function getExecutorImplementationFactory(): ?callable
+    {
+        return $this->executorImplementationFactory;
     }
 
     /**
