@@ -86,6 +86,7 @@ static function executeQuery(
  * @param mixed $context
  * @param array<string, mixed>|null $variableValues
  * @param array<ValidationRule>|null $validationRules Defaults to using all available rules
+ * @param callable|null $implementationFactory Creates the executor for this request
  *
  * @api
  *
@@ -100,7 +101,8 @@ static function promiseToExecute(
     ?array $variableValues = null,
     ?string $operationName = null,
     ?callable $fieldResolver = null,
-    ?array $validationRules = null
+    ?array $validationRules = null,
+    ?callable $implementationFactory = null
 ): GraphQL\Executor\Promise\Promise
 ```
 
@@ -827,7 +829,7 @@ Usage example:
  *
  * @api
  */
-static function create(array $options = []): self
+static function create(array $options = []): GraphQL\Type\SchemaConfig
 ```
 
 ```php
@@ -847,7 +849,7 @@ function getQuery()
  *
  * @api
  */
-function setQuery($query): self
+function setQuery($query): GraphQL\Type\SchemaConfig
 ```
 
 ```php
@@ -867,7 +869,7 @@ function getMutation()
  *
  * @api
  */
-function setMutation($mutation): self
+function setMutation($mutation): GraphQL\Type\SchemaConfig
 ```
 
 ```php
@@ -887,7 +889,7 @@ function getSubscription()
  *
  * @api
  */
-function setSubscription($subscription): self
+function setSubscription($subscription): GraphQL\Type\SchemaConfig
 ```
 
 ```php
@@ -909,7 +911,7 @@ function getTypes()
  *
  * @api
  */
-function setTypes($types): self
+function setTypes($types): GraphQL\Type\SchemaConfig
 ```
 
 ```php
@@ -930,7 +932,7 @@ function getScalarOverrides(): ?array
  *
  * @api
  */
-function setScalarOverrides(?array $scalarOverrides): self
+function setScalarOverrides(?array $scalarOverrides): GraphQL\Type\SchemaConfig
 ```
 
 ```php
@@ -948,7 +950,7 @@ function getDirectives(): ?array
  *
  * @api
  */
-function setDirectives(?array $directives): self
+function setDirectives(?array $directives): GraphQL\Type\SchemaConfig
 ```
 
 ```php
@@ -968,7 +970,7 @@ function getTypeLoader(): ?callable
  *
  * @api
  */
-function setTypeLoader(?callable $typeLoader): self
+function setTypeLoader(?callable $typeLoader): GraphQL\Type\SchemaConfig
 ```
 
 ## GraphQL\Type\Schema
@@ -1694,7 +1696,8 @@ static function promiseToExecute(
     ?array $variableValues = null,
     ?string $operationName = null,
     ?callable $fieldResolver = null,
-    ?callable $argsMapper = null
+    ?callable $argsMapper = null,
+    ?callable $implementationFactory = null
 ): GraphQL\Executor\Promise\Promise
 ```
 
@@ -1786,7 +1789,7 @@ public $extensions;
  *
  * @api
  */
-function setErrorFormatter(?callable $errorFormatter): self
+function setErrorFormatter(?callable $errorFormatter): GraphQL\Executor\ExecutionResult
 ```
 
 ```php
@@ -1803,7 +1806,7 @@ function setErrorFormatter(?callable $errorFormatter): self
  *
  * @api
  */
-function setErrorsHandler(?callable $errorsHandler): self
+function setErrorsHandler(?callable $errorsHandler): GraphQL\Executor\ExecutionResult
 ```
 
 ```php
@@ -2477,7 +2480,7 @@ Usage example:
  *
  * @throws InvariantViolation
  */
-static function create(array $config = []): self
+static function create(array $config = []): GraphQL\Server\ServerConfig
 ```
 
 ```php
@@ -2486,7 +2489,7 @@ static function create(array $config = []): self
  *
  * @api
  */
-function setContext($context): self
+function setContext($context): GraphQL\Server\ServerConfig
 ```
 
 ```php
@@ -2497,7 +2500,7 @@ function setContext($context): self
  *
  * @api
  */
-function setRootValue($rootValue): self
+function setRootValue($rootValue): GraphQL\Server\ServerConfig
 ```
 
 ```php
@@ -2506,7 +2509,7 @@ function setRootValue($rootValue): self
  *
  * @api
  */
-function setErrorFormatter(callable $errorFormatter): self
+function setErrorFormatter(callable $errorFormatter): GraphQL\Server\ServerConfig
 ```
 
 ```php
@@ -2515,7 +2518,7 @@ function setErrorFormatter(callable $errorFormatter): self
  *
  * @api
  */
-function setErrorsHandler(callable $handler): self
+function setErrorsHandler(callable $handler): GraphQL\Server\ServerConfig
 ```
 
 ```php
@@ -2528,7 +2531,7 @@ function setErrorsHandler(callable $handler): self
  *
  * @api
  */
-function setValidationRules($validationRules): self
+function setValidationRules($validationRules): GraphQL\Server\ServerConfig
 ```
 
 ```php
@@ -2537,7 +2540,7 @@ function setValidationRules($validationRules): self
  *
  * @api
  */
-function setPersistedQueryLoader(?callable $persistedQueryLoader): self
+function setPersistedQueryLoader(?callable $persistedQueryLoader): GraphQL\Server\ServerConfig
 ```
 
 ```php
@@ -2548,7 +2551,7 @@ function setPersistedQueryLoader(?callable $persistedQueryLoader): self
  *
  * @api
  */
-function setDebugFlag(int $debugFlag = 'GraphQL\\Error\\DebugFlag::INCLUDE_DEBUG_MESSAGE'): self
+function setDebugFlag(int $debugFlag = 'GraphQL\\Error\\DebugFlag::INCLUDE_DEBUG_MESSAGE'): GraphQL\Server\ServerConfig
 ```
 
 ```php
@@ -2557,7 +2560,7 @@ function setDebugFlag(int $debugFlag = 'GraphQL\\Error\\DebugFlag::INCLUDE_DEBUG
  *
  * @api
  */
-function setQueryBatching(bool $enableBatching): self
+function setQueryBatching(bool $enableBatching): GraphQL\Server\ServerConfig
 ```
 
 ## GraphQL\Server\Helper
