@@ -1,7 +1,12 @@
 ARG IMAGE
 FROM ${IMAGE}
 
-RUN apt-get update \
+# Bullseye security packages have moved to the Debian archive.
+RUN . /etc/os-release \
+  && if [ "$VERSION_CODENAME" = "bullseye" ]; then \
+    sed -i 's|http://deb.debian.org/debian-security|https://archive.debian.org/debian-security|g' /etc/apt/sources.list; \
+  fi \
+  && apt-get update \
   && apt-get install --yes --no-install-recommends \
     git \
     unzip \
