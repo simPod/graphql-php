@@ -2,6 +2,8 @@
 
 namespace GraphQL\Server;
 
+use GraphQL\Error\Error;
+use GraphQL\Error\FormattedError;
 use GraphQL\Error\InvariantViolation;
 use GraphQL\Executor\ExecutionResult;
 use GraphQL\Executor\Promise\Promise;
@@ -212,7 +214,16 @@ class StandardServer
             );
         }
 
-        $result = $execute();
+        try {
+            $result = $execute();
+        } catch (RequestError $error) {
+            $result = new ExecutionResult(null, [Error::createLocatedError($error)]);
+            $result->setErrorFormatter(FormattedError::prepareFormatter(
+                $this->config->getErrorFormatter(),
+                $this->config->getDebugFlag()
+            ));
+            $result->setErrorsHandler($this->config->getErrorsHandler());
+        }
 
         return $result instanceof Promise
             ? $result->then(static fn ($resolved) => $helper->createResponse($resolved, $mediaType))
