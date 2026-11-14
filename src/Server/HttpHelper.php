@@ -108,6 +108,12 @@ final class HttpHelper
             $statusCode = 422;
             foreach ($result->errors as $error) {
                 $cause = $error->getPrevious();
+                if ($cause instanceof HttpRequestError) {
+                    $statusCode = $cause->statusCode;
+                    $headers = $cause->headers;
+                    break;
+                }
+
                 if ($error instanceof SyntaxError || $cause instanceof CannotParseJsonBody) {
                     $statusCode = 400;
                     break;

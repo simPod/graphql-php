@@ -7,6 +7,7 @@ use GraphQL\Error\FormattedError;
 use GraphQL\Error\InvariantViolation;
 use GraphQL\Executor\ExecutionResult;
 use GraphQL\Executor\Promise\Promise;
+use GraphQL\Server\Exception\CannotReadBody;
 use GraphQL\Utils\Utils;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -127,10 +128,16 @@ class StandardServer
     public function executeRequest($parsedBody = null)
     {
         if ($parsedBody === null) {
-            $parsedBody = $this->helper->parseHttpRequest();
+            $parsedBody = $this->config->getGraphQLOverHttp()
+                ? $this->parseHttpRequest()
+                : $this->helper->parseHttpRequest();
         }
 
         if (is_array($parsedBody)) {
+            if ($this->config->getGraphQLOverHttp()) {
+                throw new HttpRequestError('GraphQL-over-HTTP requests must contain one operation, not a batch', 422);
+            }
+
             return $this->helper->executeBatch($this->config, $parsedBody);
         }
 
@@ -190,9 +197,40 @@ class StandardServer
      */
     public function executePsrRequest(RequestInterface $request)
     {
-        $parsedBody = $this->helper->parsePsrRequest($request);
+        if ($this->config->getGraphQLOverHttp()) {
+            parse_str($request->getUri()->getQuery(), $queryParams);
+            $method = $request->getMethod();
+            $parsedBody = (new HttpRequestParser())->parse(
+                $method,
+                $request->getHeaderLine('Content-Type'),
+                $method === 'POST' ? $request->getBody()->__toString() : '',
+                $queryParams
+            );
+        } else {
+            $parsedBody = $this->helper->parsePsrRequest($request);
+        }
 
         return $this->executeRequest($parsedBody);
+    }
+
+    /** @throws RequestError */
+    private function parseHttpRequest(): OperationParams
+    {
+        $method = $_SERVER['REQUEST_METHOD'] ?? '';
+        $body = '';
+        if ($method === 'POST') {
+            $body = file_get_contents('php://input');
+            if ($body === false) {
+                throw new CannotReadBody('Cannot read request body.');
+            }
+        }
+
+        return (new HttpRequestParser())->parse(
+            $method,
+            $_SERVER['CONTENT_TYPE'] ?? '',
+            $body,
+            $_GET
+        );
     }
 
     /**
